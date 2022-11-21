@@ -16,7 +16,7 @@
 
 #include <stdlib.h>
 
-#include <iostream>
+#define _THREAD(thr) ((thread*)thr)
 
 namespace atomicx
 {    
@@ -26,12 +26,20 @@ namespace atomicx
 
     void Kernel::SetNextThread (void)
     {
-        m_pCurrent = m_pCurrent == nullptr ? (thread*) m_first : (thread*) m_pCurrent->next;
+        do
+        {
+            m_pCurrent = m_pCurrent == nullptr ? (thread*) m_first : (thread*) m_pCurrent->next;
+        } while (m_pCurrent == nullptr);
+
+        if (m_pCurrent->m_status == status::sleeping)
+        { 
+            m_pCurrent->m_status = status::running;
+        }
     }
 
     void Kernel::start(void)
     {
-        uint8_t nStart;
+        volatile uint8_t nStart;
         m_pStackStart = &nStart;
 
         nRunning = true;
@@ -40,18 +48,20 @@ namespace atomicx
 
         while (m_pCurrent != nullptr && nRunning)
         {
-            std::cout << "Thread ID:" << ((uint8_t) m_pCurrent->GetStatus ()) << std::endl; 
-
-            if (m_pCurrent->m_status == status::starting)
+            if (setjmp (m_pCurrent->m_joinContext) == 0)
             {
-                if (setjmp (m_context) == 0)
+                if (m_pCurrent->m_status == status::starting)
                 {
                     m_pCurrent->run ();
+                }
+                else
+                {
+                    longjmp (m_pCurrent->m_context, 1);
                 }
             }
 
             SetNextThread ();
-        }
+        } 
     }
 
     /*
@@ -68,8 +78,39 @@ namespace atomicx
         return "thread";
     }
 
-    status thread::GetStatus ()
+    unsigned int thread::GetStatus ()
     {
-        return m_status;
+        return (unsigned int) m_status;
+    }
+
+    void thread::yield(atomicx_time aTime, status type)
+    {
+        (void) aTime;
+    
+        if (m_kContext.nRunning)
+        {
+            volatile uint8_t nStop = 0xAA;
+            m_pStackStop = &nStop;
+            
+            if (type == status::running)
+            {
+                m_status = status::sleeping;
+            }
+
+            // Adding a 4 size_t's as padding to allow safe execution within the
+            // thread context changing procedures 
+            if (m_nMaxStackSize >= (m_nStackSize = (m_kContext.m_pStackStart - m_pStackStop)))
+            {
+                memcpy ((void*) m_pStack, (const void*) m_pStackStop, m_nStackSize);
+
+                if (setjmp (m_context) == 0)
+                {
+                    //longjmp (m_joinContext, 1);
+                    longjmp (m_joinContext, 1);
+                }
+
+                memcpy ((void*) m_kContext.m_pCurrent->m_pStackStop, (const void*) m_kContext.m_pCurrent->m_pStack, m_kContext.m_pCurrent->m_nStackSize);
+            }
+        }
     }
 }

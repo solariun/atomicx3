@@ -18,7 +18,7 @@
 
 #include <iostream>
 
-atomicx::Kernel kernel;
+static atomicx::Kernel kernel;
 
 class test : public atomicx::thread
 {
@@ -38,7 +38,18 @@ class test : public atomicx::thread
 
         void run ()
         {
-            std::cout << "Thread initiating: " << std::endl;
+            std::cout << __func__ << ": Thread initiating: " << std::hex << this << std::dec << std::endl;
+
+            int nValue = 0;
+
+            while (true)
+            {
+                std::cout << __func__ << ": Value: [" << nValue++ << "], ID:" << std::hex << (this) << std::dec << std::endl << std::flush;
+
+                ::usleep (200000);
+
+                yield (0);
+            }
         }
 };
 
@@ -55,7 +66,7 @@ int main ()
 
     for (auto& th : kernel)
     {
-        std::cout << "thread: " << th().GetName () << ", ID: " << ((size_t) &(th()))<< std::endl;
+        std::cout << __func__ << ": listing thread: " << th().GetName () << ", ID: " << ((size_t) &(th()))<< std::endl;
     }
 
     kernel.start ();
