@@ -52,6 +52,17 @@ arduino-cli compile -v -b STMicroelectronics:stm32:GenF1:pnum=BLUEPILL_F103C8,us
 
 ```
 
+## Hints for bluepill STM32F103
+
+Exemple compilation/upload:
+
+`arduino-cli compile -v -b STMicroelectronics:stm32:GenF1:pnum=BLUEPILL_F103C8,usb=CDCgen -upload -p "." .`
+
+If you see the error: `Error during Upload: Property 'upload.tool.serial' is undefined`
+please, Add the following line anywhere in the STM32 boards.txt file, otherwise:
+`GenF1.menu.upload_method.swdMethod.upload.tool.default=stm32CubeProg`
+
+
 Despite the lack of feature parity at the moment, Arduino CLI provides many of the features you can find in the Arduino
 IDE. Let's see some examples.
 
@@ -746,240 +757,10 @@ Maixduino:k210  0.3.11    0.3.11 Maixduino
 https://raw.githubusercontent.com/sparkfun/Arduino_Boards/master/IDE_Board_Manager/package_sparkfun_index.json
 https://dl.espressif.com/dl/package_esp32_index.json
 http://arduino.esp8266.com/stable/package_esp8266com_index.json
-https://raw.githubusercontent.com/stm32duino/BoardManagerFiles/master/package_stmicroelectronics_index.json
+https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json
 https://raw.githubusercontent.com/damellis/attiny/ide-1.6.x-boards-manager/package_damellis_attiny_index.json
 http://dl.sipeed.com/MAIX/Maixduino/package_Maixduino_k210_index.json
 
 
-## Full TODAY's boards
 
-```
-Board Name                          FQBN
-3D printer boards                   STMicroelectronics:stm32:3dprinter
-4D Systems gen4 IoD Range           esp8266:esp8266:gen4iod
-AI Thinker ESP32-CAM                esp32:esp32:esp32cam
-ALKS ESP32                          esp32:esp32:alksesp32
-ATtiny24/44/84                      attiny:avr:ATtinyX4
-ATtiny25/45/85                      attiny:avr:ATtinyX5
-Adafruit Circuit Playground         arduino:avr:circuitplay32u4cat
-Adafruit Circuit Playground Express arduino:samd:adafruit_circuitplayground_m0
-Adafruit ESP32 Feather              esp32:esp32:featheresp32
-Adafruit Feather HUZZAH ESP8266     esp8266:esp8266:huzzah
-Amperka WiFi Slot                   esp8266:esp8266:wifi_slot
-Arduino                             esp8266:esp8266:arduino-esp8266
-Arduino BT                          arduino:avr:bt
-Arduino Due (Native USB Port)       arduino:sam:arduino_due_x
-Arduino Due (Programming Port)      arduino:sam:arduino_due_x_dbg
-Arduino Duemilanove or Diecimila    arduino:avr:diecimila
-Arduino Esplora                     arduino:avr:esplora
-Arduino Ethernet                    arduino:avr:ethernet
-Arduino Fio                         arduino:avr:fio
-Arduino Gemma                       arduino:avr:gemma
-Arduino Industrial 101              arduino:avr:chiwawa
-Arduino Leonardo                    arduino:avr:leonardo
-Arduino Leonardo ETH                arduino:avr:leonardoeth
-Arduino M0                          arduino:samd:mzero_bl
-Arduino M0 Pro (Native USB Port)    arduino:samd:mzero_pro_bl
-Arduino M0 Pro (Programming Port)   arduino:samd:mzero_pro_bl_dbg
-Arduino MKR FOX 1200                arduino:samd:mkrfox1200
-Arduino MKR GSM 1400                arduino:samd:mkrgsm1400
-Arduino MKR NB 1500                 arduino:samd:mkrnb1500
-Arduino MKR Vidor 4000              arduino:samd:mkrvidor4000
-Arduino MKR WAN 1300                arduino:samd:mkrwan1300
-Arduino MKR WAN 1310                arduino:samd:mkrwan1310
-Arduino MKR WiFi 1010               arduino:samd:mkrwifi1010
-Arduino MKR1000                     arduino:samd:mkr1000
-Arduino MKRZERO                     arduino:samd:mkrzero
-Arduino Mega ADK                    arduino:avr:megaADK
-Arduino Mega or Mega 2560           arduino:avr:mega
-Arduino Micro                       arduino:avr:micro
-Arduino Mini                        arduino:avr:mini
-Arduino NANO 33 IoT                 arduino:samd:nano_33_iot
-Arduino NG or older                 arduino:avr:atmegang
-Arduino Nano                        arduino:avr:nano
-Arduino Nano 33 BLE                 arduino:mbed_nano:nano33ble
-Arduino Nano Every                  arduino:megaavr:nona4809
-Arduino Nano RP2040 Connect         arduino:mbed_nano:nanorp2040connect
-Arduino Pro or Pro Mini             arduino:avr:pro
-Arduino Robot Control               arduino:avr:robotControl
-Arduino Robot Motor                 arduino:avr:robotMotor
-Arduino Tian                        arduino:samd:tian
-Arduino Uno                         arduino:avr:uno
-Arduino Uno Mini                    arduino:avr:unomini
-Arduino Uno WiFi                    arduino:avr:unowifi
-Arduino Uno WiFi Rev2               arduino:megaavr:uno2018
-Arduino Yún                         arduino:avr:yun
-Arduino Yún Mini                    arduino:avr:yunmini
-Arduino Zero (Native USB Port)      arduino:samd:arduino_zero_native
-Arduino Zero (Programming Port)     arduino:samd:arduino_zero_edbg
-BPI-BIT                             esp32:esp32:bpi-bit
-Blues Wireless boards               STMicroelectronics:stm32:BluesW
-D-duino-32                          esp32:esp32:d-duino-32
-DOIT ESP-Mx DevKit (ESP8285)        esp8266:esp8266:espmxdevkit
-DOIT ESP32 DEVKIT V1                esp32:esp32:esp32doit-devkit-v1
-DOIT ESPduino32                     esp32:esp32:esp32doit-espduino
-Digistump Oak                       esp8266:esp8266:oak
-Discovery                           STMicroelectronics:stm32:Disco
-Dongsen Tech Pocket 32              esp32:esp32:pocket_32
-ESP32 Dev Module                    esp32:esp32:esp32
-ESP32 FM DevKit                     esp32:esp32:fm-devkit
-ESP32 Pico Kit                      esp32:esp32:pico32
-ESP32 Wrover Module                 esp32:esp32:esp32wrover
-ESP32vn IoT Uno                     esp32:esp32:esp32vn-iot-uno
-ESPDuino (ESP-13 Module)            esp8266:esp8266:espduino
-ESPea32                             esp32:esp32:espea32
-ESPectro Core                       esp8266:esp8266:espectro
-ESPectro32                          esp32:esp32:espectro32
-ESPino (ESP-12 Module)              esp8266:esp8266:espino
-ESPresso Lite 1.0                   esp8266:esp8266:espresso_lite_v1
-ESPresso Lite 2.0                   esp8266:esp8266:espresso_lite_v2
-ET-Board                            esp32:esp32:ET-Board
-Elecgator boards                    STMicroelectronics:stm32:Elecgator
-Electronic SweetPeas - ESP320       esp32:esp32:esp320
-Electronic speed controllers        STMicroelectronics:stm32:ESC_board
-Eval                                STMicroelectronics:stm32:Eval
-FireBeetle-ESP32                    esp32:esp32:firebeetle32
-Frog Board ESP32                    esp32:esp32:frogboard
-Garatronic-McHobby                  STMicroelectronics:stm32:Garatronic
-Generic ESP8266 Module              esp8266:esp8266:generic
-Generic ESP8285 Module              esp8266:esp8266:esp8285
-Generic Flight Controllers          STMicroelectronics:stm32:GenFlight
-Generic STM32F0 series              STMicroelectronics:stm32:GenF0
-Generic STM32F1 series              STMicroelectronics:stm32:GenF1
-Generic STM32F2 series              STMicroelectronics:stm32:GenF2
-Generic STM32F3 series              STMicroelectronics:stm32:GenF3
-Generic STM32F4 series              STMicroelectronics:stm32:GenF4
-Generic STM32F7 series              STMicroelectronics:stm32:GenF7
-Generic STM32G0 series              STMicroelectronics:stm32:GenG0
-Generic STM32G4 series              STMicroelectronics:stm32:GenG4
-Generic STM32H7 Series              STMicroelectronics:stm32:GenH7
-Generic STM32L0 series              STMicroelectronics:stm32:GenL0
-Generic STM32L1 series              STMicroelectronics:stm32:GenL1
-Generic STM32L4 series              STMicroelectronics:stm32:GenL4
-Generic STM32L5 series              STMicroelectronics:stm32:GenL5
-Generic STM32U5 series              STMicroelectronics:stm32:GenU5
-Generic STM32WB series              STMicroelectronics:stm32:GenWB
-Generic STM32WL series              STMicroelectronics:stm32:GenWL
-HONEYLemon                          esp32:esp32:honeylemon
-Heltec WiFi Kit 32                  esp32:esp32:heltec_wifi_kit_32
-Heltec WiFi LoRa 32                 esp32:esp32:heltec_wifi_lora_32
-Heltec WiFi LoRa 32(V2)             esp32:esp32:heltec_wifi_lora_32_V2
-Heltec Wireless Stick               esp32:esp32:heltec_wireless_stick
-Heltec Wireless Stick Lite          esp32:esp32:heltec_wireless_stick_lite
-Hornbill ESP32 Dev                  esp32:esp32:hornbill32dev
-Hornbill ESP32 Minima               esp32:esp32:hornbill32minima
-IMBRIOS LOGSENS_V1P1                esp32:esp32:imbrios-logsens-v1p1
-INEX OpenKB                         esp32:esp32:OpenKB
-ITEAD Sonoff                        esp8266:esp8266:sonoff
-IntoRobot Fig                       esp32:esp32:intorobot-fig
-Invent One                          esp8266:esp8266:inventone
-KITS ESP32 EDU                      esp32:esp32:kits-edu
-LOLIN D32                           esp32:esp32:d32
-LOLIN D32 PRO                       esp32:esp32:d32_pro
-LOLIN(WEMOS) D1 R2 & mini           esp8266:esp8266:d1_mini
-LOLIN(WEMOS) D1 mini (clone)        esp8266:esp8266:d1_mini_clone
-LOLIN(WEMOS) D1 mini Lite           esp8266:esp8266:d1_mini_lite
-LOLIN(WEMOS) D1 mini Pro            esp8266:esp8266:d1_mini_pro
-LOLIN(WeMos) D1 R1                  esp8266:esp8266:d1
-Labplus mPython                     esp32:esp32:mPython
-LamLoei AIoT DaaN Board             Maixduino:k210:aiotdaan
-Lifely Agrumino Lemon v4            esp8266:esp8266:agruminolemon
-LilyPad Arduino                     arduino:avr:lilypad
-LilyPad Arduino USB                 arduino:avr:LilyPadUSB
-Linino One                          arduino:avr:one
-LoPy                                esp32:esp32:lopy
-LoPy4                               esp32:esp32:lopy4
-LoRa boards                         STMicroelectronics:stm32:LoRa
-M5Stack-ATOM                        esp32:esp32:m5stack-atom
-M5Stack-Core-ESP32                  esp32:esp32:m5stack-core-esp32
-M5Stack-Core2                       esp32:esp32:m5stack-core2
-M5Stack-CoreInk                     esp32:esp32:m5stack-coreink
-M5Stack-FIRE                        esp32:esp32:m5stack-fire
-M5Stack-Timer-CAM                   esp32:esp32:m5stack-timer-cam
-M5Stick-C                           esp32:esp32:m5stick-c
-MGBOT IOTIK 32A                     esp32:esp32:mgbot-iotik32a
-MGBOT IOTIK 32B                     esp32:esp32:mgbot-iotik32b
-MH ET LIVE ESP32DevKIT              esp32:esp32:mhetesp32devkit
-MH ET LIVE ESP32MiniKit             esp32:esp32:mhetesp32minikit
-MagicBit                            esp32:esp32:magicbit
-Metro ESP-32                        esp32:esp32:metro_esp-32
-Microduino-CoreESP32                esp32:esp32:CoreESP32
-Midatronics boards                  STMicroelectronics:stm32:Midatronics
-Nano32                              esp32:esp32:nano32
-Node32s                             esp32:esp32:node32s
-NodeMCU 0.9 (ESP-12 Module)         esp8266:esp8266:nodemcu
-NodeMCU 1.0 (ESP-12E Module)        esp8266:esp8266:nodemcuv2
-NodeMCU-32S                         esp32:esp32:nodemcu-32s
-Noduino Quantum                     esp32:esp32:quantum
-Nucleo-144                          STMicroelectronics:stm32:Nucleo_144
-Nucleo-32                           STMicroelectronics:stm32:Nucleo_32
-Nucleo-64                           STMicroelectronics:stm32:Nucleo_64
-ODROID ESP32                        esp32:esp32:odroid_esp32
-OLIMEX ESP32-DevKit-LiPo            esp32:esp32:esp32-DevKitLipo
-OLIMEX ESP32-EVB                    esp32:esp32:esp32-evb
-OLIMEX ESP32-GATEWAY                esp32:esp32:esp32-gateway
-OLIMEX ESP32-PoE                    esp32:esp32:esp32-poe
-OLIMEX ESP32-PoE-ISO                esp32:esp32:esp32-poe-iso
-OROCA EduBot                        esp32:esp32:oroca_edubot
-Olimex MOD-WIFI-ESP8266(-DEV)       esp8266:esp8266:modwifi
-Onehorse ESP32 Dev Module           esp32:esp32:onehorse32dev
-Phoenix 1.0                         esp8266:esp8266:phoenix_v1
-Phoenix 2.0                         esp8266:esp8266:phoenix_v2
-Piranha ESP-32                      esp32:esp32:piranha_esp-32
-ProtoCentral HealthyPi 4            esp32:esp32:healthypi4
-Pycom GPy                           esp32:esp32:gpy
-S.ODI Ultra v1                      esp32:esp32:S_ODI_Ultra
-STM32MP1 series coprocessor         STMicroelectronics:stm32:STM32MP1
-Schirmilabs Eduino WiFi             esp8266:esp8266:eduinowifi
-Seeed Wio Link                      esp8266:esp8266:wiolink
-Senses's WEIZEN                     esp32:esp32:sensesiot_weizen
-Silicognition wESP32                esp32:esp32:wesp32
-Sipeed Maix Bit Board               Maixduino:k210:bit
-Sipeed Maix Bit-Mic Board           Maixduino:k210:bitm
-Sipeed Maix Go Board                Maixduino:k210:go
-Sipeed Maix One Dock Board          Maixduino:k210:m1
-Sipeed Maixduino Board              Maixduino:k210:mduino
-SparkFun Blynk Board                esp8266:esp8266:blynk
-SparkFun ESP32 Thing                esp32:esp32:esp32thing
-SparkFun ESP32 Thing Plus           esp32:esp32:esp32thing_plus
-SparkFun ESP8266 Thing              esp8266:esp8266:thing
-SparkFun ESP8266 Thing Dev          esp8266:esp8266:thingdev
-SparkFun LoRa Gateway 1-Channel     esp32:esp32:sparkfun_lora_gateway_1-channel
-SweetPea ESP-210                    esp8266:esp8266:esp210
-T-Beam                              esp32:esp32:t-beam
-TTGO LoRa32-OLED V1                 esp32:esp32:ttgo-lora32-v1
-TTGO LoRa32-OLED v2.1.6             esp32:esp32:ttgo-lora32-v21new
-TTGO T-Watch                        esp32:esp32:twatch
-TTGO T1                             esp32:esp32:ttgo-t1
-TTGO T7 V1.3 Mini32                 esp32:esp32:ttgo-t7-v13-mini32
-TTGO T7 V1.4 Mini32                 esp32:esp32:ttgo-t7-v14-mini32
-ThaiEasyElec's ESPino               esp8266:esp8266:espinotee
-ThaiEasyElec's ESPino32             esp32:esp32:espino32
-TinyPICO                            esp32:esp32:tinypico
-Turta IoT Node                      esp32:esp32:turta_iot_node
-VintLabs ESP32 Devkit               esp32:esp32:vintlabs-devkit-v1
-WEMOS D1 MINI ESP32                 esp32:esp32:d1_mini32
-WEMOS LOLIN32                       esp32:esp32:lolin32
-WEMOS LOLIN32 Lite                  esp32:esp32:lolin32-lite
-WeMos WiFi&Bluetooth Battery        esp32:esp32:WeMosBat
-WiFi Kit 8                          esp8266:esp8266:wifi_kit_8
-WiFiduino                           esp8266:esp8266:wifiduino
-WiFiduino32                         esp32:esp32:wifiduino32
-WiPy 3.0                            esp32:esp32:wipy3
-Widora AIR                          esp32:esp32:widora-air
-WifInfo                             esp8266:esp8266:wifinfo
-XinaBox CW01                        esp8266:esp8266:cw01
-XinaBox CW02                        esp32:esp32:cw02
-u-blox NINA-W10 series (ESP32)      esp32:esp32:nina_w10
-```
-
-## Hints for bluepill STM32F103
-
-Exemple compilation/upload:
-
-`arduino-cli compile -v -b STMicroelectronics:stm32:GenF1:pnum=BLUEPILL_F103C8,usb=CDCgen -upload -p "." .`
-
-If you see the error: `Error during Upload: Property 'upload.tool.serial' is undefined`
-please, Add the following line anywhere in the STM32 boards.txt file, otherwise:
-`GenF1.menu.upload_method.swdMethod.upload.tool.default=stm32CubeProg`
 

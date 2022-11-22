@@ -18,7 +18,7 @@
 
 #include <iostream>
 
-static atomicx::Kernel kernel;
+atomicx::Kernel kernel;
 
 class test : public atomicx::thread
 {
@@ -44,11 +44,11 @@ class test : public atomicx::thread
 
             while (true)
             {
-                std::cout << __func__ << ": Value: [" << nValue++ << "], ID:" << std::hex << (this) << std::dec << std::endl << std::flush;
+                std::cout << __func__ << ": Value: [" << nValue++ << "], ID:" << std::hex << (this) << std::dec << ", StackSize: " << GetStackSize () << " bytes" << ((char) 13) << std::flush;
 
-                ::usleep (200000);
+                //::usleep (20000);
 
-                yield (0);
+                kernel.yield(0);
             }
         }
 };

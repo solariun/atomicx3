@@ -86,30 +86,37 @@ define FUNC_MAKE_DIR
 	fi
 endef
 
-.PHONY:
+.PHONY: build
 
 # same as all: 
 # 	Making multiple targets and you want all of them to run? Make an all target. 
 # *Since this is the first rule listed*, it will run by default if make is called without 
 # specifying a target, regardless the name, "all" is a convention name for it.
-default: makedir $(TARGET)
+default: build
 	@echo  AtomicX binary $(TARGET) has been compiled
 	@echo executing $(TARGET)
 	$(TARGET)
 
+x86: clean default
 
 makedir:
 	$(call FUNC_MAKE_DIR,$(BIN_DIR))
 	@echo "OBJs: [$(OBJS)]"
 
-rebuild: makedir build
+build: makedir $(TARGET)
 
-build: makedir clean $(TARGET)
-
-debug: makedir rebuild
+lldb: makedir rebuild
 	@echo  AtomicX binary $(TARGET) has been compiled
 	@echo starting lldb $(TARGET)
 	lldb $(TARGET)
+
+gdb: makedir rebuild
+	@echo  AtomicX binary $(TARGET) has been compiled
+	@echo starting lldb $(TARGET)
+	gdb $(TARGET)
+
+nano:
+	arduino-cli compile -b arduino:avr:nano:cpu=atmega328  --upload -P usbasp  test/test
 
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $(TARGET) $(OBJS) $(LFLAGS) $(LIBS)

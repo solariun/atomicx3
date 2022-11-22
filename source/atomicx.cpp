@@ -24,7 +24,7 @@ namespace atomicx
     * Kernel functions 
     */
 
-    void Kernel::SetNextThread (void)
+    inline void Kernel::SetNextThread (void)
     {
         do
         {
@@ -39,8 +39,8 @@ namespace atomicx
 
     void Kernel::start(void)
     {
-        volatile uint8_t nStart;
-        m_pStackStart = &nStart;
+        volatile uint8_t __var = 0;
+        m_pStackStart =  &__var;
 
         nRunning = true;
 
@@ -64,13 +64,61 @@ namespace atomicx
         } 
     }
 
+    bool Kernel::yield(atomicx_time aTime, status type)
+    {
+        (void) aTime;
+    
+        if (nRunning)
+        {            
+            if (type == status::running)
+            {
+                m_pCurrent->m_status = status::sleeping;
+            }
+
+            m_pCurrent->m_pStackEnd = (uint8_t*) &aTime;
+
+            m_pCurrent->m_nStackSize = (m_pStackStart - m_pCurrent->m_pStackEnd);
+
+            // Adding a 4 size_t's as padding to allow safe execution within the
+            // thread context changing procedures 
+            if (m_pCurrent->m_nMaxStackSize >= m_pCurrent->m_nStackSize)
+            {
+                memcpy ((void*) m_pCurrent->m_pStack, (const void*)  m_pCurrent->m_pStackEnd, m_pCurrent->m_nStackSize);
+
+                if (setjmp (m_pCurrent->m_context) == 0)
+                {
+                    longjmp (m_pCurrent->m_joinContext, 1);
+                }
+                else
+                {
+                    m_pCurrent->m_nStackSize = m_pStackStart - m_pCurrent->m_pStackEnd;
+                    if (memcpy ((void*) m_pCurrent->m_pStackEnd, (const void*) m_pCurrent->m_pStack, m_pCurrent->m_nStackSize) != m_pCurrent->m_pStackEnd)
+                    {
+                        exit (-1);
+                    }
+                }
+            }
+            else
+            {
+                exit (-2);
+            }
+
+            m_pCurrent->m_status = status::running;
+
+            return true;
+        }
+
+        return false;
+    }
+
+
     /*
     * thread functions
     */
 
     thread::~thread ()
     {
-        m_kContext.Detach (*this);
+        m_Kernel.Detach (*this);
     }
 
     const char* thread::GetName()
@@ -83,34 +131,14 @@ namespace atomicx
         return (unsigned int) m_status;
     }
 
-    void thread::yield(atomicx_time aTime, status type)
+    size_t thread::GetStackSize ()
     {
-        (void) aTime;
-    
-        if (m_kContext.nRunning)
-        {
-            volatile uint8_t nStop = 0xAA;
-            m_pStackStop = &nStop;
-            
-            if (type == status::running)
-            {
-                m_status = status::sleeping;
-            }
-
-            // Adding a 4 size_t's as padding to allow safe execution within the
-            // thread context changing procedures 
-            if (m_nMaxStackSize >= (m_nStackSize = (m_kContext.m_pStackStart - m_pStackStop)))
-            {
-                memcpy ((void*) m_pStack, (const void*) m_pStackStop, m_nStackSize);
-
-                if (setjmp (m_context) == 0)
-                {
-                    //longjmp (m_joinContext, 1);
-                    longjmp (m_joinContext, 1);
-                }
-
-                memcpy ((void*) m_kContext.m_pCurrent->m_pStackStop, (const void*) m_kContext.m_pCurrent->m_pStack, m_kContext.m_pCurrent->m_nStackSize);
-            }
-        }
+        return m_nStackSize;
     }
+
+    size_t thread::GetMaxStackSize ()
+    {
+        return m_nMaxStackSize;
+    }
+
 }

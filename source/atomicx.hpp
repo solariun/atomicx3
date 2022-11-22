@@ -23,6 +23,7 @@ typedef uint32_t atomicx_time;
 
 namespace atomicx
 {
+    #define GetStackPoint() ({volatile uint8_t ___var = 0; &___var;})
 
     /*
     * ---------------------------------------------------------------------
@@ -324,6 +325,8 @@ namespace atomicx
 
     public:
 
+        bool yield(atomicx_time aTime, status type=status::running);
+
         void start(void);
 
     };
@@ -342,9 +345,6 @@ namespace atomicx
         // avoid corrupting the stack space on context change
         friend class Kernel;
         
-        //Kernel context binding
-        Kernel& m_kContext;
-
         // Initial state for the thread
         status m_status = status::starting;
 
@@ -360,12 +360,12 @@ namespace atomicx
         // Pointer for the virtual stack
         volatile size_t* m_pStack;
         // The last point in the processing stack
-        volatile uint8_t* m_pStackStop = nullptr;
+        volatile uint8_t* m_pStackEnd = nullptr;
 
     protected:
-
-        void yield(atomicx_time aTime, status type=status::running);
-
+        //Kernel context binding
+        Kernel& m_Kernel;
+        
     public:
         template<size_t N>thread (Kernel& kContext, size_t (&stack)[N]);
 
@@ -376,16 +376,20 @@ namespace atomicx
         virtual void run(void) = 0;
 
         unsigned int GetStatus ();
+
+        size_t GetStackSize ();
+
+        size_t GetMaxStackSize ();
     };
 
     template<size_t N> thread::thread (Kernel& kContext, size_t (&stack)[N]) : 
-        m_kContext(kContext),
         m_status(status::starting),
         m_context{},
         m_nMaxStackSize(N*sizeof (size_t)), 
-        m_pStack ((size_t*) &stack)
+        m_pStack ((size_t*) &stack),
+        m_Kernel(kContext)
     {
-        m_kContext.AttachBack (*this);
+        m_Kernel.AttachBack (*this);
     }
 
 }
