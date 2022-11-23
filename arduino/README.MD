@@ -9,7 +9,6 @@ arduino-cli board details -b arduino:avr:uno --list-programmers
 
 arduino-cli board details "$1"
 
-arduino-cli board listall
 
 arduino-cli board listall esp8266:esp8266:wifi
 
