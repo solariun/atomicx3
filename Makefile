@@ -105,12 +105,12 @@ makedir:
 
 build: makedir $(TARGET)
 
-lldb: makedir rebuild
+lldb: clean build
 	@echo  AtomicX binary $(TARGET) has been compiled
 	@echo starting lldb $(TARGET)
 	lldb $(TARGET)
 
-gdb: makedir rebuild
+gdb: clean build
 	@echo  AtomicX binary $(TARGET) has been compiled
 	@echo starting lldb $(TARGET)
 	gdb $(TARGET)

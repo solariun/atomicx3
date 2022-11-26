@@ -178,7 +178,6 @@ namespace atomicx
     protected:
         template <typename U> friend class Iterator;
 
-        T* m_current=nullptr;
         T* m_first=nullptr;
         T* m_last=nullptr;
 
@@ -244,25 +243,21 @@ namespace atomicx
         {
             m_first = nullptr;
             listItem.prev = nullptr;
-            m_current = nullptr;
         }
         else if (listItem.prev == nullptr)
         {
             listItem.next->prev = nullptr;
             m_first = (T*)listItem.next;
-            m_current = m_first;
         }
         else if (listItem.next == nullptr)
         {
             listItem.prev->next = nullptr;
             m_last = (T*)listItem.prev;
-            m_current = m_last;
         }
         else
         {
             listItem.prev->next = listItem.next;
             listItem.next->prev = listItem.prev;
-            m_current = (T*)listItem.next->prev;
         }
 
         return true;
@@ -288,24 +283,61 @@ namespace atomicx
         return Iterator<T>(nullptr);
     }
 
+    class thread; // to be used by kernel 
 
+    /*
+    * ---------------------------------------------------------------------
+    *   Notification interface
+    * ---------------------------------------------------------------------
+    */
+
+    // Payload containing
+    // the message: the size_t message transported (capable of send pointers)
+    // the type, that describes the message, allowing layers of information within the same 
+    // reference notification 
+    typedef struct
+    {
+        size_t nType;
+        size_t nMessage;
+    } Payload;
+    
+
+    typedef uint8_t NotifyChannel;
+
+    #define ATOMICX_NOTIFY_MAX_CUSTOM_CHANNEL 235
+
+    // 20 reserved kernel notification channels are stated here
+    // Those notification channels are used internally to create
+    // private and specialized lanes for notifications inside
+    // the kernel.
+    //
+    // All other synchronizations will be ported using it, 
+    // allowing autonomous and detached powerful tools and 
+    // extra libs.
+    enum NotifyType : NotifyChannel
+    {
+        NOTIFY_KERNEL = ATOMICX_NOTIFY_MAX_CUSTOM_CHANNEL,
+        NOTIFY_WAIT
+    };
+
+    
     /*
     * ---------------------------------------------------------------------
     * Kernel implementation
     * ---------------------------------------------------------------------
     */
-    class thread;
 
     enum class status : uint8_t
     {
         none =0,
         starting=1,
-        wait=10, 
+        wait=10,
         sleeping,
         halted,
         paused,
         locked=100,
-        running=200
+        running=200,
+        now
     };
 
     class Kernel : public DynamicList<thread>
@@ -320,17 +352,21 @@ namespace atomicx
         volatile uint8_t* m_pStackStart = nullptr;
         jmp_buf m_context;
 
+        // no delete used for back compatibility with old cpp versions
+        Kernel ();
+
     protected:
         void SetNextThread (void);
 
     public:
 
-        bool yield(atomicx_time aTime, status type=status::running);
+        static Kernel& GetInstance();
 
         void start(void);
-
     };
 
+
+    static Kernel& kernel = Kernel::GetInstance();
     /*
     * ---------------------------------------------------------------------
     * thread implementation
@@ -350,8 +386,10 @@ namespace atomicx
 
         // Thread context register buffer
         jmp_buf m_context;
+        
         // Start context to return to the kernel
-        jmp_buf m_joinContext;
+        //jmp_buf m_joinContext;
+        
         // Total size of the virtual stack
         size_t m_nMaxStackSize; 
         // Actual used virtual stack
@@ -362,12 +400,42 @@ namespace atomicx
         // The last point in the processing stack
         volatile uint8_t* m_pStackEnd = nullptr;
 
+        // Wait and notify implementation
+
+        // Channel of the notification
+        // it exist to create specialized notifications
+        // and also custom that would not collide and 
+        // to be safe. 
+        // Up to 236 custom channels # 0 - 235
+        // 20 channels are reserved to # 236 - 255 enum class KernelChannel
+        uint8_t m_nNotifyChannel;
+
+        // Notification Reference, can be any variable in the system,
+        // for consistency, only real variables can be used, no naked 
+        // values will be allowed, this wat any variable can be used as 
+        // a notifier. 
+        void* m_pRefPointer;
+
+        // Payload containing
+        // the message: the size_t message transported (capable of send pointers)
+        // the type, that describes the message, allowing layers of information within the same 
+        // reference notification
+        Payload m_Payload; 
+
+        struct
+        {
+            bool bWaitAnyType : 1;
+        } m_flags;
+
     protected:
-        //Kernel context binding
-        Kernel& m_Kernel;
         
+        bool yield(atomicx_time aTime, status type = status::sleeping);
+
+        template <typename T> bool SetWait (T& ref, size_t nType, size_t nMessage, bool bWaitAllTypes, NotifyChannel nChannel);
+
     public:
-        template<size_t N>thread (Kernel& kContext, size_t (&stack)[N]);
+
+        template<size_t N>thread (size_t (&stack)[N]);
 
         virtual ~thread ();
 
@@ -380,18 +448,136 @@ namespace atomicx
         size_t GetStackSize ();
 
         size_t GetMaxStackSize ();
+
+        // --------------------------------------
+        // Synchronization foundation functions
+        // --------------------------------------
+
+        // Waiting for notifications
+        template <typename T> bool Wait (T& ref, size_t nType, size_t &nMessage, NotifyChannel nChannel = NOTIFY_WAIT);
+
+        template <typename T> bool WaitAll (T& ref, size_t &nType, size_t &nMessage, NotifyChannel nChannel = NOTIFY_WAIT);
+
+
+        // Notifying 
+        template<typename T> size_t SafeNotify(T& ref, size_t nType, size_t nMessage, bool bNotifyAll = false, NotifyChannel nChannel = NOTIFY_WAIT);
+
+        template<typename T> size_t Notify(T& ref, size_t nType, size_t nMessage, NotifyChannel nChannel = NOTIFY_WAIT);
+
+        template<typename T> size_t NotifyAll(T& ref, size_t nType, size_t nMessage,  NotifyChannel nChannel = NOTIFY_WAIT);
     };
 
-    template<size_t N> thread::thread (Kernel& kContext, size_t (&stack)[N]) : 
+
+    /*
+    * ---------------------------------------------------------------------
+    * Class functions implementation
+    * ---------------------------------------------------------------------
+    */
+
+    /*
+    * ---------------------------------------------------------------------
+    * Kernel
+    * ---------------------------------------------------------------------
+    */
+
+    template <typename T> bool thread::SetWait (T& ref, size_t nType, size_t nMessage, bool bWaitAllTypes, NotifyChannel nChannel)
+    {
+        m_nNotifyChannel = nChannel;
+
+        m_pRefPointer = (void*) &ref;
+
+        m_Payload.nMessage = nMessage;
+
+        m_Payload.nType = nType;
+
+        m_flags.bWaitAnyType = bWaitAllTypes;
+
+        return true;
+    }
+
+    template <typename T> bool thread::Wait (T& ref, size_t nType, size_t& nMessage, NotifyChannel nChannel)
+    {
+        if (! SetWait (ref, nType, nMessage, false, nChannel)) return false;
+
+        return yield (0, status::wait);
+    }
+
+    template <typename T> bool thread::WaitAll (T& ref, size_t& nType, size_t& nMessage, NotifyChannel nChannel)
+    {
+        if (! SetWait (ref, nType, nMessage, true, nChannel)) return false;
+
+        return yield (0, status::wait);
+    }
+
+    template<typename T> size_t thread::SafeNotify(T& ref, size_t nType, size_t nMessage, bool bNotifyAll, NotifyChannel nChannel)
+    {
+        size_t nNotified = 0;
+
+        for (auto& th : kernel)
+        {
+            // highest level, what notification channel to use
+            if (th.m_nNotifyChannel == nChannel)
+            {
+                // if thread is in wait state and ref pointer matches
+                if (th.m_status == status::wait && th.m_pRefPointer == &ref)
+                {
+                    // decide to notify based on
+                    // if set to notify all waits regardless of type
+                    if (bNotifyAll || th.m_flags.bWaitAnyType || nType == th.m_Payload.nType)
+                    {
+                        // Return now 
+                        th.m_status = status::now;
+
+                        // Populate retuning data
+
+                        th.m_Payload.nType = nType;
+                        th.m_Payload.nMessage = nMessage;
+
+                        // disable reference
+                        th.m_pRefPointer = nullptr;
+                        th.m_flags.bWaitAnyType = false;
+
+                        nNotified++;
+                    }
+                }
+            }
+        }
+
+        return nNotified;
+    }
+
+    template<typename T> size_t thread::Notify(T& ref, size_t nType, size_t nMessage, NotifyChannel nChannel)
+    {
+        size_t nReturn = SafeNotify (ref, nType, nMessage, false, nChannel);
+
+        yield (0, status::now);
+
+        return nReturn;
+    }
+
+    template<typename T> size_t thread::NotifyAll(T& ref, size_t nType, size_t nMessage,  NotifyChannel nChannel)
+    {
+        size_t nReturn = SafeNotify (ref, nType, nMessage, true, nChannel);
+
+        yield (0, status::now);
+
+        return nReturn;
+    }
+
+    /*
+    * ---------------------------------------------------------------------
+    * thread
+    * ---------------------------------------------------------------------
+    */
+
+    template<size_t N> thread::thread (size_t (&stack)[N]) : 
         m_status(status::starting),
         m_context{},
         m_nMaxStackSize(N*sizeof (size_t)), 
-        m_pStack ((size_t*) &stack),
-        m_Kernel(kContext)
+        m_pStack ((size_t*) &stack)
     {
-        m_Kernel.AttachBack (*this);
+        kernel.AttachBack (*this);
     }
-
 }
 
 #endif

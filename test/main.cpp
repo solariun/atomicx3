@@ -18,20 +18,55 @@
 
 #include <iostream>
 
-atomicx::Kernel kernel;
+void* ref;
 
-class test : public atomicx::thread
+class WaitThread : public atomicx::thread
+{
+private:
+    size_t stack [128];
+
+public:
+    WaitThread () : thread (stack)
+    {
+
+    }
+
+    ~WaitThread ()
+    {
+        std::cout << " WaitThread : ID:" << ((size_t) this) << ", being destructed." << std::endl;
+    }
+
+    void run ()
+    {
+        size_t nMessage = 0;
+
+        std::cout << __func__ << ", Starting waiting..." << std::endl << std::flush;
+
+        while (true)
+        {
+            std::cout << __func__ << ", WAIT for a  message... " << std::endl << std::flush;
+
+            Wait (ref, 1, nMessage);
+
+            std::cout << __func__ << ", received a message from: " << std::hex << nMessage << std::dec << std::endl << std::flush;
+
+        }
+
+    }
+};
+
+class Test : public atomicx::thread
 {
     private:
         size_t stack [128];
 
     public:
-        test () : thread(kernel, stack)
+        Test () : thread(stack)
         {
 
         }
 
-        ~test ()
+        ~Test ()
         {
             std::cout << "ID:" << ((size_t) this) << ", being destructed." << std::endl;
         }
@@ -42,34 +77,36 @@ class test : public atomicx::thread
 
             int nValue = 0;
 
-            while (true)
+            while (yield(0))
             {
                 std::cout << __func__ << ": Value: [" << nValue++ << "], ID:" << std::hex << (this) << std::dec << ", StackSize: " << GetStackSize () << " bytes" << ((char) 13) << std::flush;
 
-                //::usleep (20000);
-
-                kernel.yield(0);
+                Notify (ref, 1, (size_t) this);
             }
         }
 };
 
 int main ()
 {
-    test test1;
-    test test2;
-    test test3;
-    test test4;
-    test test5;
-    test test6;
-    test test7;
-    test test8;
 
-    for (auto& th : kernel)
+    WaitThread wait1;
+     //WaitThread wait2;
+
+    Test test1;
+    // Test test2;
+    // Test test3;
+    // Test test4;
+    // Test test5;
+    // Test test6;
+    // Test test7;
+    // Test test8;
+
+    for (auto& th : atomicx::kernel)
     {
-        std::cout << __func__ << ": listing thread: " << th().GetName () << ", ID: " << ((size_t) &(th()))<< std::endl;
+        std::cout << __func__ << ": listing thread: " << th().GetName () << std::hex << ", ID: " << ((size_t) &(th())) << std::dec << std::endl;
     }
 
-    kernel.start ();
+    atomicx::kernel.start ();
 
     return 0;
 }
