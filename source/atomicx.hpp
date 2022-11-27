@@ -21,17 +21,46 @@
 
 typedef uint32_t atomicx_time;
 
-#ifdef PC
-#include <iostream> 
-#endif 
+    // ------------------------------------------------------
+    // LOG FACILITIES
+    //
+    // TO USE, define -D_DEBUG=<LEVEL> where level is any of 
+    // . those listed in DBGLevel, ex
+    // .    -D_DEBUG=INFO 
+    // .     * on the example, from DEBUG to INFO will be 
+    // .       displayed
+    // ------------------------------------------------------
+
+    #define STRINGIFY_2(a) #a
+    #define STRINGIFY(a) STRINGIFY_2(a)
+
+    #define NOTRACE(i, x) (void) #x
+
+    #ifdef _DEBUG
+    #include <iostream> 
+    #define TRACE(i, x) if (DBGLevel::i <= DBGLevel::_DEBUG) std::cout << "TRACE<" << #i << "> " << this << "(" << __FUNCTION__ << ": " << __LINE__ << "):" << x
+    #else
+    #define TRACE(i, x) NOTRACE(i,x)
+    #endif 
+
+    enum class DBGLevel
+    {
+        TRACE,
+        DEBUG,
+        INFO,
+        WARNING,
+        ERROR,
+        CRITICAL,
+    };
+
+    // ------------------------------------------------------
 
 namespace atomicx
 {
     #define GetStackPoint() ({volatile uint8_t ___var = 0; &___var;})
-    #define STRINGIFY_2(a) #a
-    #define STRINGIFY(a) STRINGIFY_2(a)
 
 
+    // ------------------------------------------------------
 #if 0
     /*
     * ---------------------------------------------------------------------
@@ -479,10 +508,37 @@ namespace atomicx
 
     public:
 
-        static Kernel& GetInstance();
+            /*
+            * ATTENTION: GetTick and SleepTick MUST be ported from user 
+            *
+            * crete functions with the following prototype on your code,
+            * for example, see test/main.cpp
+            * 
+            *   atomicx_time atomicx::Kernel::GetTick (void) { <code> }
+            *   void atomicx::Kernel::SleepTick(atomicx_time nSleep) { <code> }
+            */
 
-        void start(void);
-    };
+            /**
+             * @brief Implement the custom Tick acquisition
+             *
+             * @return atomicx_time
+             */
+            atomicx_time GetTick(void);
+
+            /**
+             * @brief Implement a custom sleep, usually based in the same GetTick granularity
+             *
+             * @param nSleep    How long custom tick to wait
+             *
+             * @note This function is particularly special, since it give freedom to tweak the
+             *       processor power consumption if necessary
+             */
+            void SleepTick(atomicx_time nSleep);
+            
+            static Kernel& GetInstance();
+
+            void start(void);
+        };
 
 
     static Kernel& kernel = Kernel::GetInstance();
@@ -516,6 +572,10 @@ namespace atomicx
         // The last point in the processing stack
         volatile uint8_t* m_pStackEnd = nullptr;
 
+        // Next context switch event
+        atomicx_time m_tmNextEvent=0;
+        atomicx_time m_nice=0;
+        
         // Wait and notify implementation
 
         // Channel of the notification
@@ -693,9 +753,14 @@ namespace atomicx
                         th.m_status = status::now;
 
                         // Populate retuning data
-
                         th.m_payload.nType = nType;
                         th.m_payload.nMessage = nMessage;
+
+                        TRACE(WARNING,
+                                " Notifying [" << &th << "](" << th.GetName () << "), nType: " \
+                                << th.m_payload.nType << ", Message: " << \
+                                (void*) th.m_payload.nMessage << std::endl
+                            );
 
                         // disable reference
                         th.m_pRefPointer = nullptr;
@@ -708,7 +773,7 @@ namespace atomicx
                 }
             }
         }
-        
+
         return nNotified;
     }
 
@@ -737,9 +802,18 @@ namespace atomicx
 
         //PrvSafeNotify (ref, nType, nMessage, status::syncWait, false, nChannel);
 
+        nMessage = 0xAABBCC;
+
         if (! SetWait (ref, nType, nMessage, false, nChannel)) return false;
 
-        return yield (0, status::wait);
+        if (yield (0, status::wait))
+        {
+            nMessage = m_payload.nMessage;
+
+            return true;
+        }
+
+        return false;
     }
 
     template <typename T> bool thread::WaitAll (T& ref, size_t& nType, size_t& nMessage, NotifyChannel nChannel)
@@ -748,7 +822,15 @@ namespace atomicx
 
         if (! SetWait (ref, nType, nMessage, true, nChannel)) return false;
 
-        return yield (0, status::wait);
+        if (yield (0, status::wait))
+        {
+            nMessage = m_payload.nMessage;
+            nType = m_payload.nType;
+
+            return true;
+        }
+
+        return false;
     }
 
     template<typename T> size_t thread::SafeNotify(T& ref, size_t& nType, size_t& nMessage, bool bNotifyOne, NotifyChannel nChannel)
@@ -797,9 +879,9 @@ namespace atomicx
             {
                 if (th.m_status == status::wait && th.m_nNotifyChannel == nChannel)
                 {
-                    if (th.m_pRefPointer && th.m_payload.nType == nType)
+                    if (th.m_pRefPointer == &ref && th.m_payload.nType == nType)
                     {
-                        if ((--nCounter) >= nAtLeast)
+                        if ((++nCounter) >= nAtLeast)
                         {
                             return true;
                         }
@@ -814,7 +896,7 @@ namespace atomicx
             if (SetWait (ref, nType, nMessage, false, nChannel) == false) return false;
             yield (nWaitFor, status::syncWait);
 
-        } while (nCounter < nAtLeast);
+        } while (true);
 
         return true;
      }

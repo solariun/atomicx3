@@ -8,16 +8,54 @@
 #include "atomicx.hpp"
 
 #include <stdio.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #include <string.h>
 #include <stdint.h>
-#include <setjmp.h>
 
 #include <stdlib.h>
 #include <iostream> 
 
 void* ref;
+
+
+#ifndef FAKE_TIMER
+    static atomicx_time nCounter=0;
+#endif 
+/*
+ * Define the default ticket granularity
+ * to milliseconds or round tick if -DFAKE_TICKER
+ * is provided on compilation
+ */
+atomicx_time atomicx::Kernel::GetTick (void)
+{
+#ifndef FAKE_TIMER
+    struct timeval tp;
+    gettimeofday (&tp, NULL);
+
+    return (atomicx_time)tp.tv_sec * 1000 + tp.tv_usec / 1000;
+#else
+    nCounter++;
+
+    return nCounter;
+#endif
+}
+
+/*
+ * Sleep for few Ticks, since the default ticket granularity
+ * is set to Milliseconds (if -DFAKE_TICKET provide will it will
+ * be context switch countings), the thread will sleep for
+ * the amount of time needed till next thread start.
+ */
+void atomicx::Kernel::SleepTick(atomicx_time nSleep)
+{
+#ifndef FAKE_TIMER
+    usleep ((useconds_t)nSleep * 1000);
+#else
+    while (nSleep); usleep(100);
+#endif
+}
 
 class WaitThread : public atomicx::thread
 {
@@ -52,7 +90,7 @@ public:
 
             Wait (ref, 1, nMessage);
 
-            //std::cout << __func__ << ", received a message from: " << std::hex << nMessage << std::dec << std::endl << std::flush;
+            TRACE (TRACE, kernel.GetTick () << ":" << GetName () << "." << __func__ << ", received a message from: " << std::hex << nMessage << std::dec << std::endl << std::flush);
 
         }
 
@@ -96,9 +134,9 @@ class Test : public atomicx::thread
             while (yield(0))
             {
                 // Also force context change
-                nNotified = NotifyAll (ref, 1, (size_t) this, 2,1);
+                nNotified = NotifyAll (ref, 1, (size_t) this, 3,1);
 
-                std::cout << __func__ << ": Value: [" << nValue++ << "], Notified: [" << (ssize_t) nNotified << "]. ID:" << std::hex << (this) << std::dec << ", StackSize: " << GetStackSize () << "/" << GetMaxStackSize () << ((char) 27) << "[K" << ((char) 13) << std::flush;
+                std::cout << __func__ << "<" << atomicx::kernel.GetTick () << "> Value: [" << nValue++ << "], Notified: [" << (ssize_t) nNotified << "]. ID:" << std::hex << (this) << std::dec << ", StackSize: " << GetStackSize () << "/" << GetMaxStackSize () << ((char) 27) << "[K" << std::endl << ((char) 13) << std::flush;
             }
         }
 
@@ -111,18 +149,27 @@ class Test : public atomicx::thread
 int main ()
 {
 
+
     Test test1;
     Test test2;
     Test test3;
+    
+    WaitThread wait1;
+    
     Test test4;
     Test test5;
+
+    WaitThread wait2;
+    WaitThread wait3;
+
     Test test6;
     Test test7;
     // Test test8;
 
-    WaitThread wait1;
-    WaitThread wait2;
-    WaitThread wait3;
+    WaitThread wait4;
+    WaitThread wait5;
+    WaitThread wait6;
+    WaitThread wait7;
 
     for (auto& th : atomicx::kernel)
     {

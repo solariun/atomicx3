@@ -82,21 +82,25 @@ namespace atomicx
         do
         {
             m_pCurrent = m_pCurrent == nullptr ? (thread*) m_first : (thread*) m_pCurrent->next;
+
             if (m_pCurrent != nullptr) switch (m_pCurrent->m_status)
             {
                 // if waiting or syncWait (see syncNotify) dont select
                 case status::wait:
                 case status::syncWait:
+                    continue;
                     ;;
 
                 // if sleeping automatically set to running
                 case status::sleeping:
                     m_pCurrent->m_status = status::running;
-
+                case status::starting:
+                case status::running:
                 default:
-                    break;
+                    return;
             }
-        } while (m_pCurrent == nullptr || m_pCurrent->m_status == status::wait);
+
+        } while (true);
     }
 
     void Kernel::start(void)

@@ -25,6 +25,8 @@
 # 'make'        build executable file 'mycc'
 # 'make clean'  removes all .o and executable files
 #
+# use EXTRA_FLAGS=_DEBUG=<TRACE, DEBUG, INFO. WARNING. ERROR, CRITICAL> 
+# .   for logging
 
 # define the C compiler to use
 CC = g++
@@ -116,10 +118,10 @@ gdb: clean build
 	gdb $(TARGET)
 
 nano:
-	arduino-cli compile -b arduino:avr:nano:cpu=atmega328  --upload -P usbasp  test/test
+	arduino-cli compile -b arduino:avr:nano:cpu=atmega328 --build-property build.extra_flags='$(EXTRA_FLAGS)' --upload -P usbasp  test/test
 
 esp8266:
-	arduino-cli compile -v -b esp8266:esp8266:nodemcuv2:baud=921600 -upload -p "$(serial)" test/test
+	arduino-cli compile -v -b esp8266:esp8266:nodemcuv2:baud=921600 --build-property build.extra_flags='$(EXTRA_FLAGS)' -upload -p "$(serial)" test/test
 
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $(TARGET) $(OBJS) $(LFLAGS) $(LIBS)

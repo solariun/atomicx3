@@ -3,6 +3,16 @@
 
 void* ref;
 
+atomicx_time atomicx::Kernel::GetTick(void)
+{
+    return millis();
+}
+
+void atomicx::Kernel::SleepTick(atomicx_time nSleep)
+{
+    delay(nSleep);
+}
+
 class WaitThread : public atomicx::thread
 {
 private:
@@ -84,7 +94,10 @@ public:
 
             Serial.print (__FUNCTION__);
 
-            Serial.print (F(": Value: ["));
+            Serial.print (F(": Time: ["));
+            Serial.print (atomicx::kernel.GetTick ());
+
+            Serial.print (F("]: Value: ["));
             Serial.print (nValue++);
             
             Serial.print (F("], Notified: ["));
@@ -103,7 +116,8 @@ public:
             Serial.print ((char) 27) ;
             Serial.print ("[0K");
 
-            Serial.print ((char) 13);
+            Serial.println ();
+            //Serial.println ((char) 13);
             Serial.flush ();
             
             yield (0);
@@ -127,14 +141,19 @@ void setup()
     test test1;
     test test2;
     test test3;
+    WaitThread wait1;
+
     test test4;
+
+    WaitThread wait2;
+
     test test5; 
     test test6;
+    WaitThread wait3;
+
     test test7;
 
-    WaitThread wait1;
-    WaitThread wait2;
-    WaitThread wait3;
+    WaitThread wait4;
 
     Serial.begin (115200);
 
