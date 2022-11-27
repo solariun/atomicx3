@@ -1,57 +1,125 @@
 
 #include "atomicx.hpp"
 
+void* ref;
+
+class WaitThread : public atomicx::thread
+{
+private:
+    size_t stack [20];
+
+public:
+    WaitThread () : thread (stack)
+    {
+
+    }
+
+    ~WaitThread ()
+    {
+        Serial.println ((size_t) this);
+        Serial.print (": Destructing waitThread ID:");
+        Serial.flush ();
+    }
+
+    void run ()
+    {
+        size_t nMessage = 0;
+
+        Serial.println ((size_t) this);
+        Serial.print (": Initiating waitThread ID:");
+        Serial.flush ();        
+
+        while (true)
+        {
+            Wait (ref, 1, nMessage);
+        }
+    }
+
+    void StackOverflowHandler ()
+    {
+        Serial.print ("test::StackOverflow, stack size:");
+        Serial.print (GetStackSize ());
+        Serial.print ("/");
+        Serial.println (GetMaxStackSize ());
+    }
+
+};
+
 class test : public atomicx::thread
 {
-    private:
-        size_t stack [20];
+private:
+    size_t stack [30];
 
-    public:
-        test () : thread(stack)
+public:
+    test () : thread(stack)
+    {
+
+    }
+
+    ~test ()
+    {
+        Serial.print (F("ID:"));
+        Serial.print ((size_t) this);
+        Serial.println (F(", Beind destructed."));
+        Serial.flush ();
+    }
+
+    void run ()
+    {
+        (void) __COUNTER__;
+
+        Serial.print (__FUNCTION__);
+        Serial.print (F(": Thread initiating: "));
+        Serial.println ((size_t) this);
+        Serial.flush ();
+
+        delay(100);
+
+        int nValue = 0;
+        size_t nNotified = 0;
+
+        while (true)
         {
-
-        }
-
-        ~test ()
-        {
-            Serial.print (F("ID:"));
-            Serial.print ((size_t) this);
-            Serial.println (F(", Beind destructed."));
-            Serial.flush ();
-        }
-
-        void run ()
-        {
-            (void) __COUNTER__;
+            nNotified = NotifyAll (ref, 1, (size_t) this, 2, 10);
 
             Serial.print (__FUNCTION__);
-            Serial.print (F(": Thread initiating: "));
-            Serial.println ((size_t) this);
+
+            Serial.print (F(": Value: ["));
+            Serial.print (nValue++);
+            
+            Serial.print (F("], Notified: ["));
+            Serial.print (nNotified);
+
+            Serial.print (F("], ID:"));
+            Serial.print ((size_t) this);
+            
+            Serial.print (F(", StackSize: "));
+            Serial.print (GetStackSize ());
+            Serial.print (F("/"));
+            Serial.print (GetMaxStackSize ());
+
+            // Terminal scape control tv100/xterm to
+            // clear the rest of the line.
+            Serial.print ((char) 27) ;
+            Serial.print ("[0K");
+
+            Serial.print ((char) 13);
             Serial.flush ();
-
-            delay(100);
-
-            int nValue = 0;
-
-            while (true)
-            {
-                Serial.print (__FUNCTION__);
-
-                Serial.print (": Value: [");
-                Serial.print (nValue++);
-                
-                Serial.print ("], ID:");
-                Serial.print ((size_t) this);
-                
-                Serial.print (F(", StackSize: "));
-                Serial.print (GetStackSize ());
-                
-                Serial.print ((char) 13);
-                Serial.flush ();
-
-                yield (0);
-            }
+            
+            yield (0);
         }
+    }
+
+    void StackOverflowHandler ()
+    {
+        Serial.print ("test::StackOverflow, stack size:");
+        Serial.print (GetStackSize ());
+        Serial.print ("/");
+        Serial.println (GetMaxStackSize ());
+
+        delay (5000);
+    }
+
 };
 
 void setup()
@@ -63,15 +131,10 @@ void setup()
     test test5; 
     test test6;
     test test7;
-    test test8;
-    test test9;
-    test test10;
-    test test11;
-    test test12;
 
-    (void) __COUNTER__;
-    (void) __COUNTER__;
-    (void) __COUNTER__;
+    WaitThread wait1;
+    WaitThread wait2;
+    WaitThread wait3;
 
     Serial.begin (115200);
 
@@ -81,16 +144,11 @@ void setup()
 
     for (auto& th : atomicx::kernel)
     {
-        Serial.print ((char) 27);
-        Serial.print ("0P");
-        Serial.flush ();
         Serial.print (__func__);
         Serial.print (": Listing thread: ");
         Serial.print (th.GetName ());
         Serial.print (", ID:");
         Serial.println (((size_t) &(th())));
-        Serial.print (", Counter: ");
-        Serial.print (__COUNTER__);
         Serial.flush ();
     }
 

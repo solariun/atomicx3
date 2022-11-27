@@ -28,6 +28,7 @@ arduino-cli compile -b arduino:samd:mkrzero  --upload -p <serial path>  <project
 
 arduino-cli compile -b arduino:avr:nano:cpu=atmega328  --upload -p "$1" "$2"
 
+# compile for rasperry pico
 arduino-cli compile -b arduino:mbed_rp2040:pico  --upload -p "$1" "$2"
 
 # upload AVR using USB-ASP

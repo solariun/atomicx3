@@ -15,8 +15,7 @@
 #include <setjmp.h>
 
 #include <stdlib.h>
-
-#include <iostream>
+#include <iostream> 
 
 void* ref;
 
@@ -36,6 +35,11 @@ public:
         std::cout << " WaitThread : ID:" << ((size_t) this) << ", being destructed." << std::endl;
     }
 
+    const char* GetName ()
+    {
+        return "WaitThread";
+    }
+
     void run ()
     {
         size_t nMessage = 0;
@@ -44,15 +48,21 @@ public:
 
         while (true)
         {
-            std::cout << __func__ << ", WAIT for a  message... " << std::endl << std::flush;
+            //std::cout << __func__ << ", WAIT for a  message... " << std::endl << std::flush;
 
             Wait (ref, 1, nMessage);
 
-            std::cout << __func__ << ", received a message from: " << std::hex << nMessage << std::dec << std::endl << std::flush;
+            //std::cout << __func__ << ", received a message from: " << std::hex << nMessage << std::dec << std::endl << std::flush;
 
         }
 
     }
+
+    void StackOverflowHandler ()
+    {
+        
+    }
+
 };
 
 class Test : public atomicx::thread
@@ -71,35 +81,48 @@ class Test : public atomicx::thread
             std::cout << "ID:" << ((size_t) this) << ", being destructed." << std::endl;
         }
 
+        const char* GetName ()
+        {
+            return "Test";
+        }
+
         void run ()
         {
             std::cout << __func__ << ": Thread initiating: " << std::hex << this << std::dec << std::endl;
 
+            size_t nNotified = 0;
             int nValue = 0;
 
             while (yield(0))
             {
-                std::cout << __func__ << ": Value: [" << nValue++ << "], ID:" << std::hex << (this) << std::dec << ", StackSize: " << GetStackSize () << " bytes" << ((char) 13) << std::flush;
+                // Also force context change
+                nNotified = NotifyAll (ref, 1, (size_t) this, 2,1);
 
-                Notify (ref, 1, (size_t) this);
+                std::cout << __func__ << ": Value: [" << nValue++ << "], Notified: [" << (ssize_t) nNotified << "]. ID:" << std::hex << (this) << std::dec << ", StackSize: " << GetStackSize () << "/" << GetMaxStackSize () << ((char) 27) << "[K" << ((char) 13) << std::flush;
             }
+        }
+
+        void StackOverflowHandler ()
+        {
+
         }
 };
 
 int main ()
 {
 
-    WaitThread wait1;
-     //WaitThread wait2;
-
     Test test1;
-    // Test test2;
-    // Test test3;
-    // Test test4;
-    // Test test5;
-    // Test test6;
-    // Test test7;
+    Test test2;
+    Test test3;
+    Test test4;
+    Test test5;
+    Test test6;
+    Test test7;
     // Test test8;
+
+    WaitThread wait1;
+    WaitThread wait2;
+    WaitThread wait3;
 
     for (auto& th : atomicx::kernel)
     {

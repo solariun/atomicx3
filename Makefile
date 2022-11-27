@@ -97,7 +97,7 @@ default: build
 	@echo executing $(TARGET)
 	$(TARGET)
 
-x86: clean default
+pc: clean default
 
 makedir:
 	$(call FUNC_MAKE_DIR,$(BIN_DIR))
@@ -118,6 +118,9 @@ gdb: clean build
 nano:
 	arduino-cli compile -b arduino:avr:nano:cpu=atmega328  --upload -P usbasp  test/test
 
+esp8266:
+	arduino-cli compile -v -b esp8266:esp8266:nodemcuv2:baud=921600 -upload -p "$(serial)" test/test
+
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $(TARGET) $(OBJS) $(LFLAGS) $(LIBS)
 
@@ -126,7 +129,7 @@ $(TARGET): $(OBJS)
 # the rule(a .cpp file) and $@: the name of the target of the rule (a .o file)
 # (see the gnu make manual section about automatic variables)
 .cpp.o:
-	$(CC) $(CFLAGS) $(INCLUDES) -c $<  -o $@
+	$(CC) $(CFLAGS) $(EXTRA_FLAGS) $(INCLUDES) -c $<  -o $@
 
 clean:
 	@echo "CLEANING: $(OBJ) $(TARGET) *~ "

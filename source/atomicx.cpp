@@ -16,12 +16,51 @@
 
 #include <stdlib.h>
 
-#include <iostream>
+//#include <iostream> 
 
 #define _THREAD(thr) ((thread*)thr)
 
 namespace atomicx
 {    
+
+    /*
+     * Tiemout functions 
+    */
+
+#if 0
+    Timeout::Timeout () : m_timeoutValue (0)
+    {
+        Set (0);
+    }
+
+    Timeout::Timeout (atomicx_time nTimeoutValue) : m_timeoutValue (0)
+    {
+        Set (nTimeoutValue);
+    }
+
+    void Timeout::Set(atomicx_time nTimeoutValue)
+    {
+        m_timeoutValue = nTimeoutValue ? nTimeoutValue + Atomicx_GetTick () : 0;
+    }
+
+    bool Timeout::IsTimedout()
+    {
+        return (m_timeoutValue == 0 || Atomicx_GetTick () < m_timeoutValue) ? false : true;
+    }
+
+    atomicx_time Timeout::GetRemaining()
+    {
+        auto nNow = Atomicx_GetTick ();
+
+        return (nNow < m_timeoutValue) ? m_timeoutValue - nNow : 0;
+    }
+
+    atomicx_time Timeout::GetDurationSince(atomicx_time startTime)
+    {
+        return startTime - GetRemaining ();
+    }
+#endif
+
     /*
     * Kernel functions 
     */
@@ -43,14 +82,21 @@ namespace atomicx
         do
         {
             m_pCurrent = m_pCurrent == nullptr ? (thread*) m_first : (thread*) m_pCurrent->next;
+            if (m_pCurrent != nullptr) switch (m_pCurrent->m_status)
+            {
+                // if waiting or syncWait (see syncNotify) dont select
+                case status::wait:
+                case status::syncWait:
+                    ;;
+
+                // if sleeping automatically set to running
+                case status::sleeping:
+                    m_pCurrent->m_status = status::running;
+
+                default:
+                    break;
+            }
         } while (m_pCurrent == nullptr || m_pCurrent->m_status == status::wait);
-
-        if (m_pCurrent->m_status == status::sleeping)
-        { 
-            m_pCurrent->m_status = status::running;
-        }
-
-        std::cout << __func__ << ": thread [" << std::hex << ((size_t) m_pCurrent) << std::dec << "], status: " << ((int)m_pCurrent->m_status) << std::endl;
     }
 
     void Kernel::start(void)
@@ -118,6 +164,7 @@ namespace atomicx
         }
         else
         {
+            StackOverflowHandler ();
             exit (-2);
         }
 

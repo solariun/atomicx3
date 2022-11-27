@@ -21,9 +21,127 @@
 
 typedef uint32_t atomicx_time;
 
+#ifdef PC
+#include <iostream> 
+#endif 
+
 namespace atomicx
 {
     #define GetStackPoint() ({volatile uint8_t ___var = 0; &___var;})
+    #define STRINGIFY_2(a) #a
+    #define STRINGIFY(a) STRINGIFY_2(a)
+
+
+#if 0
+    /*
+    * ---------------------------------------------------------------------
+    * timeout Implementation
+    * ---------------------------------------------------------------------
+    */
+
+    atomicx::Timeout::Timeout () : m_timeoutValue (0)
+    {
+        Set (0);
+    }
+
+    atomicx::Timeout::Timeout (atomicx_time nTimeoutValue) : m_timeoutValue (0)
+    {
+        Set (nTimeoutValue);
+    }
+
+    void atomicx::Timeout::Set(atomicx_time nTimeoutValue)
+    {
+        m_timeoutValue = nTimeoutValue ? nTimeoutValue + Atomicx_GetTick () : 0;
+    }
+
+    bool atomicx::Timeout::IsTimedout()
+    {
+        return (m_timeoutValue == 0 || Atomicx_GetTick () < m_timeoutValue) ? false : true;
+    }
+
+    atomicx_time atomicx::Timeout::GetRemaining()
+    {
+        auto nNow = Atomicx_GetTick ();
+
+        return (nNow < m_timeoutValue) ? m_timeoutValue - nNow : 0;
+    }
+
+    atomicx_time atomicx::Timeout::GetDurationSince(atomicx_time startTime)
+    {
+        return startTime - GetRemaining ();
+    }
+#endif 
+
+    /*
+    * ---------------------------------------------------------------------
+    * Iterator Implementation
+    * ---------------------------------------------------------------------
+    */
+
+    /**
+     * @brief Timeout Check object
+     */
+
+    class Timeout
+    {
+        public:
+
+            /**
+             * @brief Default construct a new Timeout object
+             *
+             * @note    To decrease the amount of memory, Timeout does not save
+             *          the start time.
+             *          Special use case: if nTimeoutValue == 0, IsTimedout is always false.
+             */
+            Timeout ();
+
+            /**
+             * @brief Construct a new Timeout object
+             *
+             * @param nTimeoutValue  Timeout value to be calculated
+             *
+             * @note    To decrease the amount of memory, Timeout does not save
+             *          the start time.
+             *          Special use case: if nTimeoutValue == 0, IsTimedout is always false.
+             */
+            Timeout (atomicx_time nTimeoutValue);
+
+            /**
+             * @brief Set a timeout from now
+             *
+             * @param nTimeoutValue timeout in atomicx_time
+             */
+            void Set(atomicx_time nTimeoutValue);
+
+            /**
+             * @brief Check wether it has timeout
+             *
+             * @return true if it timeout otherwise 0
+             */
+            bool IsTimedout();
+
+            /**
+             * @brief Get the remaining time till timeout
+             *
+             * @return atomicx_time Remaining time till timeout, otherwise 0;
+             */
+            atomicx_time GetRemaining();
+
+            /**
+             * @brief Get the Time Since specific point in time
+             *
+             * @param startTime     The specific point in time
+             *
+             * @return atomicx_time How long since the point in time
+             *
+             * @note    To decrease the amount of memory, Timeout does not save
+             *          the start time.
+             */
+            atomicx_time GetDurationSince(atomicx_time startTime);
+
+        private:
+            atomicx_time m_timeoutValue = 0;
+    };
 
     /*
     * ---------------------------------------------------------------------
@@ -332,6 +450,7 @@ namespace atomicx
         none =0,
         starting=1,
         wait=10,
+        syncWait,
         sleeping,
         halted,
         paused,
@@ -387,9 +506,6 @@ namespace atomicx
         // Thread context register buffer
         jmp_buf m_context;
         
-        // Start context to return to the kernel
-        //jmp_buf m_joinContext;
-        
         // Total size of the virtual stack
         size_t m_nMaxStackSize; 
         // Actual used virtual stack
@@ -420,7 +536,7 @@ namespace atomicx
         // the message: the size_t message transported (capable of send pointers)
         // the type, that describes the message, allowing layers of information within the same 
         // reference notification
-        Payload m_Payload; 
+        Payload m_payload; 
 
         struct
         {
@@ -428,11 +544,20 @@ namespace atomicx
         } m_flags;
 
     protected:
-        
+
+        template<typename T> size_t PrvSafeNotify(T& ref, size_t& nType, size_t& nMessage, status targetStatus = status::wait, bool bNotifyAll = true, NotifyChannel nChannel = NOTIFY_WAIT);
+
         bool yield(atomicx_time aTime, status type = status::sleeping);
 
         template <typename T> bool SetWait (T& ref, size_t nType, size_t nMessage, bool bWaitAllTypes, NotifyChannel nChannel);
 
+        // Sync Notify infra-structure running over status::SyncWait
+        // Every time a wait is issue a notification is issued over SyncWait
+
+        template <typename T> inline bool NotifyWait (T& ref, size_t& nType, size_t &nMessage, NotifyChannel nChannel);
+
+        template <typename T> bool LookForWait (T& ref, size_t nType, size_t &nMessage, size_t nAtLeast, atomicx_time nWaitFor, NotifyChannel nChannel);
+        
     public:
 
         template<size_t N>thread (size_t (&stack)[N]);
@@ -442,6 +567,8 @@ namespace atomicx
         virtual const char* GetName();
 
         virtual void run(void) = 0;
+
+        virtual void StackOverflowHandler () = 0;
 
         unsigned int GetStatus ();
 
@@ -460,11 +587,53 @@ namespace atomicx
 
 
         // Notifying 
-        template<typename T> size_t SafeNotify(T& ref, size_t nType, size_t nMessage, bool bNotifyAll = false, NotifyChannel nChannel = NOTIFY_WAIT);
+        template<typename T> size_t SafeNotify(T& ref, size_t& nType, size_t& nMessage, bool bNotifyOne = true, NotifyChannel nChannel = NOTIFY_WAIT);
 
-        template<typename T> size_t Notify(T& ref, size_t nType, size_t nMessage, NotifyChannel nChannel = NOTIFY_WAIT);
-
-        template<typename T> size_t NotifyAll(T& ref, size_t nType, size_t nMessage,  NotifyChannel nChannel = NOTIFY_WAIT);
+        /**
+         * @brief   Notify one active 'wait' call for the same reference and type, also capable of 
+         *          waiting for 'wait' calls (Sync notification) when nWaitFor is set
+         *          ATTENTION: Force context change.
+         * 
+         * @tparam T            Reference Value, used as the "synchronization" variable, can be any variable (only)
+         * @param nType         The Type of the notification (user defined)
+         * @param nMessage      The Message bound to the type (user defined)
+         * @param nWaitFor      (sync notification) How long (in ticks) to 'wait' for wait calls
+         * @param nChannel      the channel where it is running, if not defined it will use the default kernel NOTIFY_WAIT
+         * 
+         * @return size_t       How many 'wait' calls get notified
+         * 
+         * @note                Once nWaitFor is set, the process will wait until either one 'wait' call or nWaitFor
+         *                      timesout.
+         *                      ATTENTION:  if nAtLeast and nWaitFor are not set, the function will NOT WAIT FOR 'WAIT' CALLS, 
+         *                                  instead it will only used whatever 'wait' calls are active.
+         * 
+         * @todo                TODO: Add timeout once time is ported to the kernel
+         */
+        template<typename T> size_t Notify(T& ref, size_t nType, size_t nMessage, atomicx_time nWaitFor=0, NotifyChannel nChannel = NOTIFY_WAIT);
+        
+        /**
+         * @brief   Notify all active 'wait' calls for the same reference and type, also capable of 
+         *          waiting for # number of 'wait' calls (Sync notification) when nAtLeast and 
+         *          nWaitFor are set
+         *          ATTENTION: Force context change.
+         * 
+         * @tparam T            Reference Value, used as the "synchronization" variable, can be any variable (only)
+         * @param nType         The Type of the notification (user defined)
+         * @param nMessage      The Message bound to the type (user defined)
+         * @param nAtLeast      (sync notification) wait for at least nAtLeast 'wait' calls
+         * @param nWaitFor      (sync notification) How long (in ticks) to 'wait' for wait calls
+         * @param nChannel      the channel where it is running, if not defined it will use the default kernel NOTIFY_WAIT
+         * 
+         * @return size_t       How many 'wait' calls get notified
+         * 
+         * @note                Once nAtLeast and nWaitFor are set, the process will wait until either nAtLeast or nWaitFor
+         *                      timesout.
+         *                      ATTENTION:  if nAtLeast and nWaitFor are not set, the function will NOT WAIT FOR 'WAIT' CALLS, 
+         *                                  instead it will only used whatever 'wait' calls are active.
+         * 
+         * @todo                TODO: Add timeout once time is ported to the kernel
+         */
+        template<typename T> size_t NotifyAll(T& ref, size_t nType, size_t nMessage, size_t nAtLeast=0, atomicx_time nWaitFor=0, NotifyChannel nChannel = NOTIFY_WAIT);
     };
 
 
@@ -480,95 +649,13 @@ namespace atomicx
     * ---------------------------------------------------------------------
     */
 
-    template <typename T> bool thread::SetWait (T& ref, size_t nType, size_t nMessage, bool bWaitAllTypes, NotifyChannel nChannel)
-    {
-        m_nNotifyChannel = nChannel;
-
-        m_pRefPointer = (void*) &ref;
-
-        m_Payload.nMessage = nMessage;
-
-        m_Payload.nType = nType;
-
-        m_flags.bWaitAnyType = bWaitAllTypes;
-
-        return true;
-    }
-
-    template <typename T> bool thread::Wait (T& ref, size_t nType, size_t& nMessage, NotifyChannel nChannel)
-    {
-        if (! SetWait (ref, nType, nMessage, false, nChannel)) return false;
-
-        return yield (0, status::wait);
-    }
-
-    template <typename T> bool thread::WaitAll (T& ref, size_t& nType, size_t& nMessage, NotifyChannel nChannel)
-    {
-        if (! SetWait (ref, nType, nMessage, true, nChannel)) return false;
-
-        return yield (0, status::wait);
-    }
-
-    template<typename T> size_t thread::SafeNotify(T& ref, size_t nType, size_t nMessage, bool bNotifyAll, NotifyChannel nChannel)
-    {
-        size_t nNotified = 0;
-
-        for (auto& th : kernel)
-        {
-            // highest level, what notification channel to use
-            if (th.m_nNotifyChannel == nChannel)
-            {
-                // if thread is in wait state and ref pointer matches
-                if (th.m_status == status::wait && th.m_pRefPointer == &ref)
-                {
-                    // decide to notify based on
-                    // if set to notify all waits regardless of type
-                    if (bNotifyAll || th.m_flags.bWaitAnyType || nType == th.m_Payload.nType)
-                    {
-                        // Return now 
-                        th.m_status = status::now;
-
-                        // Populate retuning data
-
-                        th.m_Payload.nType = nType;
-                        th.m_Payload.nMessage = nMessage;
-
-                        // disable reference
-                        th.m_pRefPointer = nullptr;
-                        th.m_flags.bWaitAnyType = false;
-
-                        nNotified++;
-                    }
-                }
-            }
-        }
-
-        return nNotified;
-    }
-
-    template<typename T> size_t thread::Notify(T& ref, size_t nType, size_t nMessage, NotifyChannel nChannel)
-    {
-        size_t nReturn = SafeNotify (ref, nType, nMessage, false, nChannel);
-
-        yield (0, status::now);
-
-        return nReturn;
-    }
-
-    template<typename T> size_t thread::NotifyAll(T& ref, size_t nType, size_t nMessage,  NotifyChannel nChannel)
-    {
-        size_t nReturn = SafeNotify (ref, nType, nMessage, true, nChannel);
-
-        yield (0, status::now);
-
-        return nReturn;
-    }
 
     /*
     * ---------------------------------------------------------------------
     * thread
     * ---------------------------------------------------------------------
     */
+
 
     template<size_t N> thread::thread (size_t (&stack)[N]) : 
         m_status(status::starting),
@@ -578,6 +665,159 @@ namespace atomicx
     {
         kernel.AttachBack (*this);
     }
+
+    
+    // *********************
+    // WAIT / Notify bases
+    // *********************
+    
+    //private
+
+    template<typename T> size_t thread::PrvSafeNotify(T& ref, size_t& nType, size_t& nMessage, status targetStatus, bool bNotifyOne, NotifyChannel nChannel)
+    {
+        size_t nNotified = 0;
+
+        for (auto& th : kernel)
+        {
+            // highest level, if it is in the correct status and notification channel
+            if (th.m_status == targetStatus && th.m_nNotifyChannel == nChannel)
+            {
+                // if ref pointer matches
+                if (th.m_pRefPointer == &ref)
+                {
+                    // decide to notify based on
+                    // if set to notify all waits regardless of type
+                    if (th.m_flags.bWaitAnyType || nType == th.m_payload.nType)
+                    {
+                        // Return now 
+                        th.m_status = status::now;
+
+                        // Populate retuning data
+
+                        th.m_payload.nType = nType;
+                        th.m_payload.nMessage = nMessage;
+
+                        // disable reference
+                        th.m_pRefPointer = nullptr;
+                        th.m_flags.bWaitAnyType = false;
+
+                        nNotified++;
+
+                        if (bNotifyOne) break;
+                    }
+                }
+            }
+        }
+        
+        return nNotified;
+    }
+
+
+    template <typename T> bool thread::SetWait (T& ref, size_t nType, size_t nMessage, bool bWaitAllTypes, NotifyChannel nChannel)
+    {
+        m_nNotifyChannel = nChannel;
+
+        m_pRefPointer = (void*) &ref;
+
+        m_payload.nMessage = nMessage;
+
+        m_payload.nType = nType;
+
+        m_flags.bWaitAnyType = bWaitAllTypes;
+
+        return true;
+    }
+
+
+    //public
+
+    template <typename T> bool thread::Wait (T& ref, size_t nType, size_t& nMessage, NotifyChannel nChannel)
+    {
+        NotifyWait (ref, nType, nMessage, nChannel);
+
+        //PrvSafeNotify (ref, nType, nMessage, status::syncWait, false, nChannel);
+
+        if (! SetWait (ref, nType, nMessage, false, nChannel)) return false;
+
+        return yield (0, status::wait);
+    }
+
+    template <typename T> bool thread::WaitAll (T& ref, size_t& nType, size_t& nMessage, NotifyChannel nChannel)
+    {
+        NotifyWait (ref, nType, nMessage, nChannel);
+
+        if (! SetWait (ref, nType, nMessage, true, nChannel)) return false;
+
+        return yield (0, status::wait);
+    }
+
+    template<typename T> size_t thread::SafeNotify(T& ref, size_t& nType, size_t& nMessage, bool bNotifyOne, NotifyChannel nChannel)
+    {
+        return PrvSafeNotify (ref, nType, nMessage, status::wait, bNotifyOne, nChannel);
+    }
+
+    template<typename T> size_t thread::Notify(T& ref, size_t nType, size_t nMessage, atomicx_time nWaitFor, NotifyChannel nChannel)
+    {
+        if (nWaitFor) if(LookForWait (ref, nType, nMessage, 1, nWaitFor, nChannel) == false) return -1;
+    
+        size_t nReturn = SafeNotify (ref, nType, nMessage, true, nChannel);
+
+        yield (0, status::now);
+
+        return nReturn;
+    }
+
+    template<typename T> size_t thread::NotifyAll(T& ref, size_t nType, size_t nMessage, size_t nAtLeast, atomicx_time nWaitFor, NotifyChannel nChannel)
+    {
+        if (nWaitFor && nAtLeast)  if(LookForWait (ref, nType, nMessage, nAtLeast, nWaitFor, nChannel) == false) return -1;
+
+        size_t nReturn = SafeNotify (ref, nType, nMessage, false, nChannel);
+
+        yield (0, status::now);
+
+        return nReturn;
+    }
+
+    template <typename T> bool thread::NotifyWait (T& ref, size_t& nType, size_t &nMessage, NotifyChannel nChannel)
+    {
+        size_t nReturn = PrvSafeNotify (ref, nType, nMessage, status::syncWait, false, nChannel);
+
+        return nReturn ? true : false;
+    }
+
+     template <typename T> bool thread::LookForWait (T& ref, size_t nType, size_t &nMessage,size_t nAtLeast, atomicx_time nWaitFor, NotifyChannel nChannel)
+     {
+        size_t nCounter = 0;
+
+        do
+        {
+            nCounter = 0;
+
+            for (auto& th : kernel)
+            {
+                if (th.m_status == status::wait && th.m_nNotifyChannel == nChannel)
+                {
+                    if (th.m_pRefPointer && th.m_payload.nType == nType)
+                    {
+                        if ((--nCounter) >= nAtLeast)
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            // Wait for one more start waiting, as a result, 
+            // other contexts have been executed so the actual nCounter may have 
+            // changed, counter again, if nCounter >= nCounter return.
+            // TODO Soon time is ported, add timeout and error handler here
+            if (SetWait (ref, nType, nMessage, false, nChannel) == false) return false;
+            yield (nWaitFor, status::syncWait);
+
+        } while (nCounter < nAtLeast);
+
+        return true;
+     }
 }
 
 #endif
