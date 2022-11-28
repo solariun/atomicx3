@@ -15,14 +15,10 @@
 #include <stdint.h>
 
 #include <stdlib.h>
-#include <iostream> 
+#include <iostream>
 
 void* ref;
 
-
-#ifndef FAKE_TIMER
-    static atomicx_time nCounter=0;
-#endif 
 /*
  * Define the default ticket granularity
  * to milliseconds or round tick if -DFAKE_TICKER
@@ -30,16 +26,10 @@ void* ref;
  */
 atomicx_time atomicx::Kernel::GetTick (void)
 {
-#ifndef FAKE_TIMER
     struct timeval tp;
     gettimeofday (&tp, NULL);
 
     return (atomicx_time)tp.tv_sec * 1000 + tp.tv_usec / 1000;
-#else
-    nCounter++;
-
-    return nCounter;
-#endif
 }
 
 /*
@@ -50,11 +40,7 @@ atomicx_time atomicx::Kernel::GetTick (void)
  */
 void atomicx::Kernel::SleepTick(atomicx_time nSleep)
 {
-#ifndef FAKE_TIMER
     usleep ((useconds_t)nSleep * 1000);
-#else
-    while (nSleep); usleep(100);
-#endif
 }
 
 class WaitThread : public atomicx::thread
@@ -63,7 +49,7 @@ private:
     size_t stack [128];
 
 public:
-    WaitThread () : thread (stack)
+    WaitThread () : thread (10, stack)
     {
 
     }
@@ -84,21 +70,20 @@ public:
 
         std::cout << __func__ << ", Starting waiting..." << std::endl << std::flush;
 
-        while (true)
+        while (yield())
         {
             //std::cout << __func__ << ", WAIT for a  message... " << std::endl << std::flush;
 
             Wait (ref, 1, nMessage);
 
-            TRACE (TRACE, kernel.GetTick () << ":" << GetName () << "." << __func__ << ", received a message from: " << std::hex << nMessage << std::dec << std::endl << std::flush);
-
+            NOTRACE (TRACE, atomicx::kernel.GetTick () << ":" << GetName () << "." << __func__ << ", received a message from: " << std::hex << nMessage << std::dec << std::endl << std::flush);
         }
 
     }
 
     void StackOverflowHandler ()
     {
-        
+
     }
 
 };
@@ -109,7 +94,7 @@ class Test : public atomicx::thread
         size_t stack [128];
 
     public:
-        Test () : thread(stack)
+        Test () : thread(300, stack)
         {
 
         }
@@ -131,7 +116,7 @@ class Test : public atomicx::thread
             size_t nNotified = 0;
             int nValue = 0;
 
-            while (yield(0))
+            while (Sleep (10))
             {
                 // Also force context change
                 nNotified = NotifyAll (ref, 1, (size_t) this, 3,1);
@@ -148,14 +133,12 @@ class Test : public atomicx::thread
 
 int main ()
 {
-
-
     Test test1;
     Test test2;
     Test test3;
-    
+
     WaitThread wait1;
-    
+
     Test test4;
     Test test5;
 

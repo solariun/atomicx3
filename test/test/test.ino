@@ -19,7 +19,7 @@ private:
     size_t stack [20];
 
 public:
-    WaitThread () : thread (stack)
+    WaitThread () : thread (10, stack)
     {
 
     }
@@ -39,7 +39,7 @@ public:
         Serial.print (": Initiating waitThread ID:");
         Serial.flush ();        
 
-        while (true)
+        while (Sleep (500))
         {
             Wait (ref, 1, nMessage);
         }
@@ -61,7 +61,7 @@ private:
     size_t stack [30];
 
 public:
-    test () : thread(stack)
+    test () : thread(10, stack)
     {
 
     }
@@ -83,7 +83,7 @@ public:
         Serial.println ((size_t) this);
         Serial.flush ();
 
-        delay(100);
+        Sleep(100);
 
         int nValue = 0;
         size_t nNotified = 0;
@@ -120,7 +120,7 @@ public:
             //Serial.println ((char) 13);
             Serial.flush ();
             
-            yield (0);
+            yield ();
         }
     }
 

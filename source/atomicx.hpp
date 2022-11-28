@@ -38,7 +38,7 @@ typedef uint32_t atomicx_time;
 
     #ifdef _DEBUG
     #include <iostream> 
-    #define TRACE(i, x) if (DBGLevel::i <= DBGLevel::_DEBUG) std::cout << "TRACE<" << #i << "> " << this << "(" << __FUNCTION__ << ": " << __LINE__ << "):" << x
+    #define TRACE(i, x) if (DBGLevel::i <= DBGLevel::_DEBUG) std::cout << "TRACE<" << #i << "> " << this << "(" << __FUNCTION__ << ": " << __LINE__ << "):" << x << std::endl << std::flush
     #else
     #define TRACE(i, x) NOTRACE(i,x)
     #endif 
@@ -54,6 +54,10 @@ typedef uint32_t atomicx_time;
     };
 
     // ------------------------------------------------------
+
+
+#define Sleep(x) yield(x, atomicx::status::sleeping)
+#define Now() yield(0, atomicx::status::now)
 
 namespace atomicx
 {
@@ -328,6 +332,8 @@ namespace atomicx
         T* m_first=nullptr;
         T* m_last=nullptr;
 
+        size_t m_nNodeCounter;
+
     public:
         
          /**
@@ -381,6 +387,8 @@ namespace atomicx
             m_last = &listItem;
         }
 
+        m_nNodeCounter++;
+
         return true;
     }
 
@@ -406,6 +414,8 @@ namespace atomicx
             listItem.prev->next = listItem.next;
             listItem.next->prev = listItem.prev;
         }
+
+        m_nNodeCounter--;
 
         return true;
     }
@@ -480,6 +490,7 @@ namespace atomicx
         starting=1,
         wait=10,
         syncWait,
+        ctxSwitch,
         sleeping,
         halted,
         paused,
@@ -508,40 +519,42 @@ namespace atomicx
 
     public:
 
-            /*
-            * ATTENTION: GetTick and SleepTick MUST be ported from user 
-            *
-            * crete functions with the following prototype on your code,
-            * for example, see test/main.cpp
-            * 
-            *   atomicx_time atomicx::Kernel::GetTick (void) { <code> }
-            *   void atomicx::Kernel::SleepTick(atomicx_time nSleep) { <code> }
-            */
+        /*
+        * ATTENTION: GetTick and SleepTick MUST be ported from user 
+        *
+        * crete functions with the following prototype on your code,
+        * for example, see test/main.cpp
+        * 
+        *   atomicx_time atomicx::Kernel::GetTick (void) { <code> }
+        *   void atomicx::Kernel::SleepTick(atomicx_time nSleep) { <code> }
+        */
 
-            /**
-             * @brief Implement the custom Tick acquisition
-             *
-             * @return atomicx_time
-             */
-            atomicx_time GetTick(void);
+        /**
+         * @brief Implement the custom Tick acquisition
+         *
+         * @return atomicx_time
+         */
+        atomicx_time GetTick(void);
 
-            /**
-             * @brief Implement a custom sleep, usually based in the same GetTick granularity
-             *
-             * @param nSleep    How long custom tick to wait
-             *
-             * @note This function is particularly special, since it give freedom to tweak the
-             *       processor power consumption if necessary
-             */
-            void SleepTick(atomicx_time nSleep);
-            
-            static Kernel& GetInstance();
+        /**
+         * @brief Implement a custom sleep, usually based in the same GetTick granularity
+         *
+         * @param nSleep    How long custom tick to wait
+         *
+         * @note This function is particularly special, since it give freedom to tweak the
+         *       processor power consumption if necessary
+         */
+        void SleepTick(atomicx_time nSleep);
+        
+        static Kernel& GetInstance();
 
-            void start(void);
-        };
+        void start(void);
+    };
 
 
     static Kernel& kernel = Kernel::GetInstance();
+
+
     /*
     * ---------------------------------------------------------------------
     * thread implementation
@@ -574,7 +587,8 @@ namespace atomicx
 
         // Next context switch event
         atomicx_time m_tmNextEvent=0;
-        atomicx_time m_nice=0;
+        atomicx_time m_tmLateBy=0;
+        atomicx_time m_nNice;
         
         // Wait and notify implementation
 
@@ -607,7 +621,7 @@ namespace atomicx
 
         template<typename T> size_t PrvSafeNotify(T& ref, size_t& nType, size_t& nMessage, status targetStatus = status::wait, bool bNotifyAll = true, NotifyChannel nChannel = NOTIFY_WAIT);
 
-        bool yield(atomicx_time aTime, status type = status::sleeping);
+        bool yield(atomicx_time aTime=0, status type = status::ctxSwitch);
 
         template <typename T> bool SetWait (T& ref, size_t nType, size_t nMessage, bool bWaitAllTypes, NotifyChannel nChannel);
 
@@ -617,18 +631,20 @@ namespace atomicx
         template <typename T> inline bool NotifyWait (T& ref, size_t& nType, size_t &nMessage, NotifyChannel nChannel);
 
         template <typename T> bool LookForWait (T& ref, size_t nType, size_t &nMessage, size_t nAtLeast, atomicx_time nWaitFor, NotifyChannel nChannel);
-        
-    public:
 
-        template<size_t N>thread (size_t (&stack)[N]);
+        template<size_t N>thread (atomicx_time nNice, size_t (&stack)[N]);
 
         virtual ~thread ();
+
+    public:
 
         virtual const char* GetName();
 
         virtual void run(void) = 0;
 
         virtual void StackOverflowHandler () = 0;
+
+        void SetNice (atomicx_time nNice);
 
         unsigned int GetStatus ();
 
@@ -717,11 +733,12 @@ namespace atomicx
     */
 
 
-    template<size_t N> thread::thread (size_t (&stack)[N]) : 
+    template<size_t N> thread::thread (atomicx_time nNice, size_t (&stack)[N]) : 
         m_status(status::starting),
         m_context{},
         m_nMaxStackSize(N*sizeof (size_t)), 
-        m_pStack ((size_t*) &stack)
+        m_pStack ((size_t*) &stack),
+        m_nNice (nNice)
     {
         kernel.AttachBack (*this);
     }
@@ -756,10 +773,10 @@ namespace atomicx
                         th.m_payload.nType = nType;
                         th.m_payload.nMessage = nMessage;
 
-                        TRACE(WARNING,
+                        TRACE(DEBUG,
                                 " Notifying [" << &th << "](" << th.GetName () << "), nType: " \
                                 << th.m_payload.nType << ", Message: " << \
-                                (void*) th.m_payload.nMessage << std::endl
+                                (void*) th.m_payload.nMessage
                             );
 
                         // disable reference
