@@ -38,7 +38,7 @@ typedef uint32_t atomicx_time;
 
     #ifdef _DEBUG
     #include <iostream> 
-    #define TRACE(i, x) if (DBGLevel::i <= DBGLevel::_DEBUG) std::cout << "TRACE<" << #i << "> " << this << "(" << __FUNCTION__ << ": " << __LINE__ << "):" << x << std::endl << std::flush
+    #define TRACE(i, x) if (DBGLevel::i <= DBGLevel::_DEBUG) std::cout << "TRACE<" << #i << "> " << this << "(" << __FUNCTION__ << ", " << __FILE__ << ":" << __LINE__ << "):" << x << std::endl << std::flush
     #else
     #define TRACE(i, x) NOTRACE(i,x)
     #endif 
@@ -478,7 +478,7 @@ namespace atomicx
         Kernel ();
 
     protected:
-        thread* SetNextThread (void);
+        thread* GetNextThread (void);
 
     public:
 
@@ -731,15 +731,18 @@ namespace atomicx
                     {
                         // Return now 
                         th.m_status = status::now;
+                        //th.m_tmNextEvent = kernel.GetTick ();
 
                         // Populate retuning data
                         th.m_payload.nType = nType;
                         th.m_payload.nMessage = nMessage;
 
                         TRACE(DEBUG,
-                                " Notifying [" << &th << "](" << th.GetName () << "), nType: " \
-                                << th.m_payload.nType << ", Message: " << \
-                                (void*) th.m_payload.nMessage
+                                "Target Status: " << (int) targetStatus \
+                                << ", Notifying [" << &th << "](" << th.GetName () \
+                                << "), nType: " << th.m_payload.nType \
+                                << ", Channel: " << (int) nChannel \
+                                << ", Message: " << (void*) th.m_payload.nMessage
                             );
 
                         // disable reference

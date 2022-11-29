@@ -39,9 +39,9 @@ public:
         Serial.print (": Initiating waitThread ID:");
         Serial.flush ();        
 
-        while (Sleep (500))
+        while (yield ())
         {
-            Wait (ref, 1, nMessage);
+            Wait (ref, 1, nMessage, 1000);
         }
     }
 
@@ -90,7 +90,7 @@ public:
 
         while (true)
         {
-            nNotified = NotifyAll (ref, 1, (size_t) this, 2, 10);
+            nNotified = NotifyAll (ref, 1, (size_t) this, 3, 100);
 
             Serial.print (__FUNCTION__);
 

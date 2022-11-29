@@ -82,6 +82,8 @@ namespace atomicx
     thread* Kernel::GetNextThread (void)
     {
         thread* thCandidate = nullptr;
+        thread* iterator = m_pCurrent;
+
         atomicx_time nNow;
 
         TRACE (DEBUG, "Num Threads: " << m_nNodeCounter);
@@ -90,31 +92,34 @@ namespace atomicx
         {
             nNow = GetTick ();
 
-            m_pCurrent = m_pCurrent == nullptr ? (thread*) m_first : m_pCurrent->next == nullptr ? m_first : (thread*) m_pCurrent->next;
+            iterator = iterator == nullptr ? (thread*) m_first : iterator->next == nullptr ? m_first : (thread*) iterator->next;
 
-            if (m_pCurrent != nullptr) TRACE (DEBUG, "LOOP st: " << (int) m_pCurrent->m_status <<", next: " << m_pCurrent->m_tmNextEvent << ": " << m_pCurrent->GetName ());
+            if (iterator != nullptr) TRACE (DEBUG, "LOOP st: " << (int) iterator->m_status <<", next: " << iterator->m_tmNextEvent << ": " << iterator->GetName ());
 
-            if (m_pCurrent != nullptr) switch (m_pCurrent->m_status)
+            if (iterator != nullptr) switch (iterator->m_status)
             {
                 // if waiting or syncWait (see syncNotify) dont select
                 case status::wait:
                 case status::syncWait:
-                    if (m_pCurrent->m_tmNextEvent == 0) continue;
+                    if (iterator->m_tmNextEvent == 0) continue;
                      
                 case status::sleeping:
                     // Select the sooner next event time
-                    if (thCandidate == nullptr || thCandidate->m_tmNextEvent > m_pCurrent->m_tmNextEvent) 
-                        thCandidate = m_pCurrent;
+                    if (thCandidate == nullptr || thCandidate->m_tmNextEvent > iterator->m_tmNextEvent) 
+                        thCandidate = iterator;
 
                     break;
 
                 case status::running:
                     // Should never be a running here, error, stop
                     thCandidate = nullptr;
+
                 case status::starting:
                 case status::now:
                 default:
-                    thCandidate = m_pCurrent;
+                    thCandidate = iterator;
+                    thCandidate->m_tmNextEvent = nNow;
+                    
                     nCounter = m_nNodeCounter;
                     continue;
             }
@@ -127,9 +132,9 @@ namespace atomicx
 
         TRACE (DEBUG, 
             "RETURN: thCandidate: [" << thCandidate << "], m_pCurrent: " \
-            << m_pCurrent << "." << (m_pCurrent ? m_pCurrent->GetName () : "NULL" ) \
-            << ", Status: " << (m_pCurrent ? (int) m_pCurrent->m_status : (int)0 ) \
-            << ", Next Event: " <<  (m_pCurrent ? m_pCurrent->m_tmNextEvent : 0) << ", Now: " << nNow
+            << iterator << "." << (iterator ? iterator->GetName () : "NULL" ) \
+            << ", Status: " << (iterator ? (int) iterator->m_status : (int)0 ) \
+            << ", Next Event: " <<  (iterator ? iterator->m_tmNextEvent : 0) << ", Now: " << nNow
         );
 
         if (thCandidate)
@@ -155,7 +160,7 @@ namespace atomicx
 
         m_pCurrent = (thread*) m_first;
 
-        while (nRunning && (m_pCurrent = SetNextThread ()))
+        while (nRunning && (m_pCurrent = GetNextThread ()))
         {
             if (m_pCurrent && setjmp (m_context) == 0)
             {
