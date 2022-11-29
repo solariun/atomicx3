@@ -65,49 +65,11 @@ namespace atomicx
 
 
     // ------------------------------------------------------
-#if 0
-    /*
-    * ---------------------------------------------------------------------
-    * timeout Implementation
-    * ---------------------------------------------------------------------
-    */
 
-    atomicx::Timeout::Timeout () : m_timeoutValue (0)
-    {
-        Set (0);
-    }
-
-    atomicx::Timeout::Timeout (atomicx_time nTimeoutValue) : m_timeoutValue (0)
-    {
-        Set (nTimeoutValue);
-    }
-
-    void atomicx::Timeout::Set(atomicx_time nTimeoutValue)
-    {
-        m_timeoutValue = nTimeoutValue ? nTimeoutValue + Atomicx_GetTick () : 0;
-    }
-
-    bool atomicx::Timeout::IsTimedout()
-    {
-        return (m_timeoutValue == 0 || Atomicx_GetTick () < m_timeoutValue) ? false : true;
-    }
-
-    atomicx_time atomicx::Timeout::GetRemaining()
-    {
-        auto nNow = Atomicx_GetTick ();
-
-        return (nNow < m_timeoutValue) ? m_timeoutValue - nNow : 0;
-    }
-
-    atomicx_time atomicx::Timeout::GetDurationSince(atomicx_time startTime)
-    {
-        return startTime - GetRemaining ();
-    }
-#endif 
 
     /*
     * ---------------------------------------------------------------------
-    * Iterator Implementation
+    * Timeout Implementation
     * ---------------------------------------------------------------------
     */
 
@@ -489,14 +451,15 @@ namespace atomicx
         none =0,
         starting=1,
         wait=10,
-        syncWait,
-        ctxSwitch,
-        sleeping,
-        halted,
-        paused,
+        syncWait=11,
+        ctxSwitch=12,
+        sleeping=13,
+        timeout=14,
+        halted=15,
+        paused=16,
         locked=100,
         running=200,
-        now
+        now=201
     };
 
     class Kernel : public DynamicList<thread>
@@ -515,7 +478,7 @@ namespace atomicx
         Kernel ();
 
     protected:
-        void SetNextThread (void);
+        thread* SetNextThread (void);
 
     public:
 
@@ -657,9 +620,9 @@ namespace atomicx
         // --------------------------------------
 
         // Waiting for notifications
-        template <typename T> bool Wait (T& ref, size_t nType, size_t &nMessage, NotifyChannel nChannel = NOTIFY_WAIT);
+        template <typename T> bool Wait (T& ref, size_t nType, size_t &nMessage, atomicx_time waitFor, NotifyChannel nChannel = NOTIFY_WAIT);
 
-        template <typename T> bool WaitAll (T& ref, size_t &nType, size_t &nMessage, NotifyChannel nChannel = NOTIFY_WAIT);
+        template <typename T> bool WaitAll (T& ref, size_t &nType, size_t &nMessage, atomicx_time waitFor, NotifyChannel nChannel = NOTIFY_WAIT);
 
 
         // Notifying 
@@ -673,7 +636,7 @@ namespace atomicx
          * @tparam T            Reference Value, used as the "synchronization" variable, can be any variable (only)
          * @param nType         The Type of the notification (user defined)
          * @param nMessage      The Message bound to the type (user defined)
-         * @param nWaitFor      (sync notification) How long (in ticks) to 'wait' for wait calls
+         * @param nWaitFor      (sync notification) How long (in ticks) to 'wait' for wait calls, 0 is wait indefinitely
          * @param nChannel      the channel where it is running, if not defined it will use the default kernel NOTIFY_WAIT
          * 
          * @return size_t       How many 'wait' calls get notified
@@ -697,7 +660,7 @@ namespace atomicx
          * @param nType         The Type of the notification (user defined)
          * @param nMessage      The Message bound to the type (user defined)
          * @param nAtLeast      (sync notification) wait for at least nAtLeast 'wait' calls
-         * @param nWaitFor      (sync notification) How long (in ticks) to 'wait' for wait calls
+         * @param nWaitFor      (sync notification) How long (in ticks) to 'wait' for wait calls, 0 is wait indefinitely
          * @param nChannel      the channel where it is running, if not defined it will use the default kernel NOTIFY_WAIT
          * 
          * @return size_t       How many 'wait' calls get notified
@@ -813,17 +776,13 @@ namespace atomicx
 
     //public
 
-    template <typename T> bool thread::Wait (T& ref, size_t nType, size_t& nMessage, NotifyChannel nChannel)
+    template <typename T> bool thread::Wait (T& ref, size_t nType, size_t& nMessage, atomicx_time waitFor, NotifyChannel nChannel)
     {
         NotifyWait (ref, nType, nMessage, nChannel);
 
-        //PrvSafeNotify (ref, nType, nMessage, status::syncWait, false, nChannel);
-
-        nMessage = 0xAABBCC;
-
         if (! SetWait (ref, nType, nMessage, false, nChannel)) return false;
 
-        if (yield (0, status::wait))
+        if (yield (waitFor, status::wait) && m_status != status::timeout)
         {
             nMessage = m_payload.nMessage;
 
@@ -833,13 +792,13 @@ namespace atomicx
         return false;
     }
 
-    template <typename T> bool thread::WaitAll (T& ref, size_t& nType, size_t& nMessage, NotifyChannel nChannel)
+    template <typename T> bool thread::WaitAll (T& ref, size_t& nType, size_t& nMessage, atomicx_time waitFor, NotifyChannel nChannel)
     {
         NotifyWait (ref, nType, nMessage, nChannel);
 
         if (! SetWait (ref, nType, nMessage, true, nChannel)) return false;
 
-        if (yield (0, status::wait))
+        if (yield (waitFor, status::wait) && m_status != status::timeout)
         {
             nMessage = m_payload.nMessage;
             nType = m_payload.nType;

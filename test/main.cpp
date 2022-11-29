@@ -70,13 +70,18 @@ public:
 
         std::cout << __func__ << ", Starting waiting..." << std::endl << std::flush;
 
-        while (yield())
+        while (true)
         {
             //std::cout << __func__ << ", WAIT for a  message... " << std::endl << std::flush;
 
-            Wait (ref, 1, nMessage);
-
-            NOTRACE (TRACE, atomicx::kernel.GetTick () << ":" << GetName () << "." << __func__ << ", received a message from: " << std::hex << nMessage << std::dec << std::endl << std::flush);
+            if (Wait (ref, 1, nMessage, 1000) == false)
+            {
+                std::cout << this << "<<<TIMEOUT>>>." << __func__ << ": Wait timeout detected." << std::endl;
+            }
+            else
+            {
+                TRACE (TRACE, atomicx::kernel.GetTick () << ":" << GetName () << "." << __func__ << ", received a message from: " << std::hex << nMessage << std::dec << std::endl << std::flush);
+            }
         }
 
     }
@@ -142,16 +147,16 @@ int main ()
     Test test4;
     Test test5;
 
-    WaitThread wait2;
-    WaitThread wait3;
+    // WaitThread wait2;
+    // WaitThread wait3;
 
-    Test test6;
-    Test test7;
-    // Test test8;
+    // Test test6;
+    // Test test7;
+    // // Test test8;
 
-    WaitThread wait4;
-    WaitThread wait5;
-    WaitThread wait6;
+    // WaitThread wait4;
+    // WaitThread wait5;
+    // WaitThread wait6;
     WaitThread wait7;
 
     for (auto& th : atomicx::kernel)

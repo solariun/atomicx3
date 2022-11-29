@@ -27,7 +27,10 @@ namespace atomicx
      * Tiemout functions 
     */
 
-#if 0
+    /*
+    * timeout methods implementations
+    */
+
     Timeout::Timeout () : m_timeoutValue (0)
     {
         Set (0);
@@ -40,17 +43,17 @@ namespace atomicx
 
     void Timeout::Set(atomicx_time nTimeoutValue)
     {
-        m_timeoutValue = nTimeoutValue ? nTimeoutValue + Atomicx_GetTick () : 0;
+        m_timeoutValue = nTimeoutValue ? nTimeoutValue + kernel.GetTick () : 0;
     }
 
     bool Timeout::IsTimedout()
     {
-        return (m_timeoutValue == 0 || Atomicx_GetTick () < m_timeoutValue) ? false : true;
+        return (m_timeoutValue == 0 || kernel.GetTick () < m_timeoutValue) ? false : true;
     }
 
     atomicx_time Timeout::GetRemaining()
     {
-        auto nNow = Atomicx_GetTick ();
+        auto nNow = kernel.GetTick ();
 
         return (nNow < m_timeoutValue) ? m_timeoutValue - nNow : 0;
     }
@@ -59,10 +62,9 @@ namespace atomicx
     {
         return startTime - GetRemaining ();
     }
-#endif
 
     /*
-    * Kernel functions 
+    * Kernel methods implementations
     */
 
     Kernel& Kernel::GetInstance()
@@ -77,25 +79,28 @@ namespace atomicx
 
     }
 
-    inline void Kernel::SetNextThread (void)
+    thread* Kernel::GetNextThread (void)
     {
         thread* thCandidate = nullptr;
         atomicx_time nNow;
+
+        TRACE (DEBUG, "Num Threads: " << m_nNodeCounter);
 
         for (size_t nCounter=0; nCounter < m_nNodeCounter; nCounter++)
         {
             nNow = GetTick ();
 
-            m_pCurrent = m_pCurrent == nullptr ? (thread*) m_first : (thread*) m_pCurrent->next;
+            m_pCurrent = m_pCurrent == nullptr ? (thread*) m_first : m_pCurrent->next == nullptr ? m_first : (thread*) m_pCurrent->next;
+
+            if (m_pCurrent != nullptr) TRACE (DEBUG, "LOOP st: " << (int) m_pCurrent->m_status <<", next: " << m_pCurrent->m_tmNextEvent << ": " << m_pCurrent->GetName ());
 
             if (m_pCurrent != nullptr) switch (m_pCurrent->m_status)
             {
                 // if waiting or syncWait (see syncNotify) dont select
                 case status::wait:
                 case status::syncWait:
-                        continue;
-
-                // select he the smallest time 
+                    if (m_pCurrent->m_tmNextEvent == 0) continue;
+                     
                 case status::sleeping:
                     // Select the sooner next event time
                     if (thCandidate == nullptr || thCandidate->m_tmNextEvent > m_pCurrent->m_tmNextEvent) 
@@ -118,12 +123,6 @@ namespace atomicx
             if (thCandidate && thCandidate->m_tmNextEvent <= nNow) break;
         }
 
-        if (thCandidate)
-        {
-            m_pCurrent = thCandidate;
-            //m_pCurrent->m_status = status::running;
-        }
-
         nNow = GetTick ();
 
         TRACE (DEBUG, 
@@ -133,16 +132,21 @@ namespace atomicx
             << ", Next Event: " <<  (m_pCurrent ? m_pCurrent->m_tmNextEvent : 0) << ", Now: " << nNow
         );
 
-        if (thCandidate && thCandidate->m_tmNextEvent > nNow)
+        if (thCandidate)
         {
-            TRACE (DEBUG, "Sleeping " << (thCandidate->m_tmNextEvent - nNow) << " ticks");
-            SleepTick (thCandidate->m_tmNextEvent - nNow);
+            if (thCandidate->m_tmNextEvent > nNow)
+            {
+                TRACE (DEBUG, "Sleeping " << (thCandidate->m_tmNextEvent - nNow) << " ticks");
+                SleepTick (thCandidate->m_tmNextEvent - nNow);
+            }
+            else
+            {
+                thCandidate->m_tmLateBy = nNow - thCandidate->m_tmNextEvent;
+                TRACE (DEBUG, "LATE by " << (thCandidate->m_tmLateBy) << " ticks");
+            }
         }
-        else
-        {
-            thCandidate->m_tmLateBy = nNow - thCandidate->m_tmNextEvent;
-            TRACE (DEBUG, "LATE by " << (thCandidate->m_tmLateBy) << " ticks");
-        }
+
+        return thCandidate;
     }
 
     void Kernel::start(void)
@@ -151,10 +155,8 @@ namespace atomicx
 
         m_pCurrent = (thread*) m_first;
 
-        do
+        while (nRunning && (m_pCurrent = SetNextThread ()))
         {
-            SetNextThread ();
-
             if (m_pCurrent && setjmp (m_context) == 0)
             {
                 if (m_pCurrent->m_status == status::starting)
@@ -166,17 +168,31 @@ namespace atomicx
                 }
                 else
                 {
-                    m_pCurrent->m_status = status::running;
+                    TRACE (DEBUG, "1 JUMP st: " << (int) m_pCurrent->m_status <<", next: " << m_pCurrent->m_tmNextEvent << ": " << m_pCurrent->GetName ());
+
+                    switch (m_pCurrent->m_status)
+                    {
+                    case status::wait:
+                    case status::syncWait:
+                        m_pCurrent->m_status = status::timeout;
+                        break;
+                    
+                    default:
+                        m_pCurrent->m_status = status::running;
+                    }
+                    
+                    TRACE (DEBUG, "2 JUMP st: " << (int) m_pCurrent->m_status <<", next: " << m_pCurrent->m_tmNextEvent << ": " << m_pCurrent->GetName ());
+
                     longjmp (m_pCurrent->m_context, 1);
                 }
             }
 
             
-        } while (m_pCurrent != nullptr && nRunning);
+        }
     }
 
     /*
-    * thread functions
+    * thread methods implementations
     */
 
     bool thread::yield(atomicx_time aTime, status type)
@@ -185,7 +201,7 @@ namespace atomicx
 
         if (! kernel.nRunning) return 1;
 
-        TRACE (DEBUG, "SWITCH Current: " << kernel.m_pCurrent << ". nextEvent: " << kernel.m_pCurrent->m_tmNextEvent << ", Status: " << (int) kernel.m_pCurrent->m_status);
+        TRACE (DEBUG, "SWITCH type: " << (int) type << ", waitFor: " << aTime << ", Current: " << kernel.m_pCurrent << ". nextEvent: " << kernel.m_pCurrent->m_tmNextEvent << ", Status: " << (int) kernel.m_pCurrent->m_status);
 
         //Prepare status
         // if yield (x>0), the default status is status::ctxSwitch
@@ -200,6 +216,14 @@ namespace atomicx
             type = status::sleeping;
             break;
 
+        case status::wait:
+        case status::syncWait:
+            // if wait for == 0, wait indefinitely 
+            if (aTime == 0)
+            {
+                kernel.m_pCurrent->m_tmNextEvent = 0;
+                break;
+            }
         case status::sleeping:
             kernel.m_pCurrent->m_tmNextEvent =  kernel.GetTick () + aTime; 
             break;
@@ -212,7 +236,7 @@ namespace atomicx
             kernel.m_pCurrent->m_tmNextEvent = (atomicx_time) kernel.GetTick ();
         }
 
-        TRACE (DEBUG, "Current: " << kernel.m_pCurrent << ". nextEvent: " << kernel.m_pCurrent->m_tmNextEvent << ", Selected status: " << (int) type);
+        TRACE (DEBUG, "SWITCH final: " << kernel.m_pCurrent << ". nextEvent: " << kernel.m_pCurrent->m_tmNextEvent << ", Selected status: " << (int) type);
 
         kernel.m_pCurrent->m_status = type;
 
@@ -246,8 +270,6 @@ namespace atomicx
             StackOverflowHandler ();
             exit (-2);
         }
-
-        kernel.m_pCurrent->m_status = status::running;
 
         return true;
     }
