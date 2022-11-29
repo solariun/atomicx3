@@ -593,7 +593,7 @@ namespace atomicx
 
         template <typename T> inline bool NotifyWait (T& ref, size_t& nType, size_t &nMessage, NotifyChannel nChannel);
 
-        template <typename T> bool LookForWait (T& ref, size_t nType, size_t &nMessage, size_t nAtLeast, atomicx_time nWaitFor, NotifyChannel nChannel);
+        template <typename T> bool LookForWait (T& ref, size_t nType, size_t &nMessage, size_t nAtLeast, Timeout nWaitFor, NotifyChannel nChannel);
 
         template<size_t N>thread (atomicx_time nNice, size_t (&stack)[N]);
 
@@ -846,7 +846,7 @@ namespace atomicx
         return nReturn ? true : false;
     }
 
-     template <typename T> bool thread::LookForWait (T& ref, size_t nType, size_t &nMessage,size_t nAtLeast, atomicx_time nWaitFor, NotifyChannel nChannel)
+     template <typename T> bool thread::LookForWait (T& ref, size_t nType, size_t &nMessage,size_t nAtLeast, Timeout nWaitFor, NotifyChannel nChannel)
      {
         size_t nCounter = 0;
 
@@ -873,11 +873,11 @@ namespace atomicx
             // changed, counter again, if nCounter >= nCounter return.
             // TODO Soon time is ported, add timeout and error handler here
             if (SetWait (ref, nType, nMessage, false, nChannel) == false) return false;
-            yield (nWaitFor, status::syncWait);
+            yield (nWaitFor.GetRemaining() + 1, status::syncWait);
 
-        } while (true);
+        } while (nWaitFor.IsTimedout () == false);
 
-        return true;
+        return false;
      }
 }
 

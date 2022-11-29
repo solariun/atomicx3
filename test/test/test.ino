@@ -58,7 +58,7 @@ public:
 class test : public atomicx::thread
 {
 private:
-    size_t stack [30];
+    size_t stack [35];
 
 public:
     test () : thread(10, stack)
@@ -90,7 +90,7 @@ public:
 
         while (true)
         {
-            nNotified = NotifyAll (ref, 1, (size_t) this, 3, 100);
+            nNotified = NotifyAll (ref, 1, (size_t) this, 3, 500);
 
             Serial.print (__FUNCTION__);
 

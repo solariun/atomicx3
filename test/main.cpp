@@ -178,8 +178,11 @@ class Test : public atomicx::thread
             while (true)
             {
                 // Also force context change
-                nNotified = NotifyAll (ref, 1, (size_t) this, 1,1);
-
+                if ((nNotified = NotifyAll (ref, 1, (size_t) this, 1,1000)) == -1)
+                {
+                    std::cout << this << "<<<TIMEOUT>>>." << __func__ << ": Wait timeout detected." << std::endl;
+                }
+                
                 std::cout << __func__ << "<" << atomicx::kernel.GetTick () << "> WaitCounter: " << WaitCounter::nCounter <<", Value: [" << nValue++ << "], Notified: [" << (ssize_t) nNotified << "]. ID:" << std::hex << (this) << std::dec << ", StackSize: " << GetStackSize () << "/" << GetMaxStackSize () << ((char) 27) << "[K" << std::endl << ((char) 13) << std::flush;
             }
         }
@@ -196,17 +199,17 @@ int main ()
     Test test2;
     Test test3;
 
-    WaitThread wait1;
+     WaitThread wait1;
 
-    // Test test4;
-    // Test test5;
+    //Test test4;
+    Test test5;
 
     WaitThread wait2;
     WaitThread wait3;
 
-    // Test test6;
-    // Test test7;
-    // // Test test8;
+    // // Test test6;
+    Test test7;
+    Test test8;
 
     WaitThread wait4;
     WaitThread wait5;
