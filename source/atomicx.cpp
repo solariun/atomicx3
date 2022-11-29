@@ -16,15 +16,15 @@
 
 #include <stdlib.h>
 
-//#include <iostream> 
+//#include <iostream>
 
 #define _THREAD(thr) ((thread*)thr)
 
 namespace atomicx
-{    
+{
 
     /*
-     * Tiemout functions 
+     * Tiemout functions
     */
 
     /*
@@ -71,7 +71,7 @@ namespace atomicx
     {
         static Kernel kernel;
 
-        return kernel; 
+        return kernel;
     }
 
     Kernel::Kernel ()
@@ -102,10 +102,10 @@ namespace atomicx
                 case status::wait:
                 case status::syncWait:
                     if (iterator->m_tmNextEvent == 0) continue;
-                     
+
                 case status::sleeping:
                     // Select the sooner next event time
-                    if (thCandidate == nullptr || thCandidate->m_tmNextEvent > iterator->m_tmNextEvent) 
+                    if (thCandidate == nullptr || thCandidate->m_tmNextEvent > iterator->m_tmNextEvent)
                         thCandidate = iterator;
 
                     break;
@@ -119,7 +119,7 @@ namespace atomicx
                 default:
                     thCandidate = iterator;
                     thCandidate->m_tmNextEvent = nNow;
-                    
+
                     nCounter = m_nNodeCounter;
                     continue;
             }
@@ -130,7 +130,7 @@ namespace atomicx
 
         nNow = GetTick ();
 
-        TRACE (DEBUG, 
+        TRACE (DEBUG,
             "RETURN: thCandidate: [" << thCandidate << "], m_pCurrent: " \
             << iterator << "." << (iterator ? iterator->GetName () : "NULL" ) \
             << ", Status: " << (iterator ? (int) iterator->m_status : (int)0 ) \
@@ -181,19 +181,24 @@ namespace atomicx
                     case status::syncWait:
                         m_pCurrent->m_status = status::timeout;
                         break;
-                    
+
                     default:
                         m_pCurrent->m_status = status::running;
                     }
-                    
+
                     TRACE (DEBUG, "2 JUMP st: " << (int) m_pCurrent->m_status <<", next: " << m_pCurrent->m_tmNextEvent << ": " << m_pCurrent->GetName ());
 
                     longjmp (m_pCurrent->m_context, 1);
                 }
             }
 
-            
+
         }
+    }
+
+    thread& Kernel::operator()()
+    {
+        return *m_pCurrent;
     }
 
     /*
@@ -206,6 +211,11 @@ namespace atomicx
 
         if (! kernel.nRunning) return 1;
 
+        // Get final util stack point
+        volatile uint8_t __var = 0;
+        kernel.m_pCurrent->m_pStackEnd = (uint8_t*) &__var;
+
+
         TRACE (DEBUG, "SWITCH type: " << (int) type << ", waitFor: " << aTime << ", Current: " << kernel.m_pCurrent << ". nextEvent: " << kernel.m_pCurrent->m_tmNextEvent << ", Status: " << (int) kernel.m_pCurrent->m_status);
 
         //Prepare status
@@ -215,26 +225,27 @@ namespace atomicx
         //
         switch (type)
         {
-        
+
         case status::ctxSwitch:
-            kernel.m_pCurrent->m_tmNextEvent =  kernel.GetTick () + (aTime ? aTime : kernel.m_pCurrent->m_nNice); 
+            kernel.m_pCurrent->m_tmNextEvent =  kernel.GetTick () + (aTime ? aTime : kernel.m_pCurrent->m_nNice);
             type = status::sleeping;
             break;
 
         case status::wait:
         case status::syncWait:
-            // if wait for == 0, wait indefinitely 
+            // if wait for == 0, wait indefinitely
             if (aTime == 0)
             {
                 kernel.m_pCurrent->m_tmNextEvent = 0;
                 break;
             }
+
         case status::sleeping:
-            kernel.m_pCurrent->m_tmNextEvent =  kernel.GetTick () + aTime; 
+            kernel.m_pCurrent->m_tmNextEvent =  kernel.GetTick () + aTime;
             break;
 
         case status::now:
-            kernel.m_pCurrent->m_tmNextEvent =  kernel.GetTick (); 
+            kernel.m_pCurrent->m_tmNextEvent =  kernel.GetTick ();
             break;
 
         default:
@@ -245,15 +256,11 @@ namespace atomicx
 
         kernel.m_pCurrent->m_status = type;
 
-        // Get final util stack point
-        volatile uint8_t __var = 0;
-        kernel.m_pCurrent->m_pStackEnd = (uint8_t*) &__var;
-
         // Calculate used stack size
         kernel.m_pCurrent->m_nStackSize = (kernel.m_pStackStart - kernel.m_pCurrent->m_pStackEnd);
 
         // Adding a 4 size_t's as padding to allow safe execution within the
-        // thread context changing procedures 
+        // thread context changing procedures
         if (kernel.m_pCurrent->m_nMaxStackSize >= kernel.m_pCurrent->m_nStackSize)
         {
             // Save full stack context
@@ -263,7 +270,7 @@ namespace atomicx
             {
                 longjmp (kernel.m_context, 1);
             }
-            
+
             // Restore full stack context
             if (memcpy ((void*) kernel.m_pCurrent->m_pStackEnd, (const void*) kernel.m_pCurrent->m_pStack, kernel.m_pCurrent->m_nStackSize) != kernel.m_pCurrent->m_pStackEnd)
             {
@@ -273,7 +280,7 @@ namespace atomicx
         else
         {
             StackOverflowHandler ();
-            exit (-2);
+            exit (0);
         }
 
         return true;
@@ -289,9 +296,9 @@ namespace atomicx
         return "thread";
     }
 
-    unsigned int thread::GetStatus ()
+    status thread::GetStatus ()
     {
-        return (unsigned int) m_status;
+        return m_status;
     }
 
     size_t thread::GetStackSize ()
@@ -308,4 +315,129 @@ namespace atomicx
     {
         m_nNice = nNice;
     }
+
+    /*
+    * ------------------------------------------------------------
+    * Mutex methods implementations
+    * ------------------------------------------------------------
+    */
+
+    bool SmartLock::Lock(atomicx_time ttimeout)
+    {
+        if (m_control.nValue != 0) return false;
+
+        // If not perform the task
+        thread& k = kernel ();
+        Timeout timeout(ttimeout);
+        size_t nMessage = 0;
+
+        TRACE (DEBUG, " -->>> TRYING TO EXCLUSIVE LOCK");
+
+        // Get exclusive lock
+        while (m_mutex.bExclusiveLock) if  (! k.Wait (m_mutex.bExclusiveLock, 1, nMessage, timeout.GetRemaining())) return false;
+
+        m_mutex.bExclusiveLock = true;
+        m_control.data.bLocked = true;
+
+        // Wait all shared locks to be done
+        while (m_mutex.nSharedLockCount) if (! k.Wait(m_mutex.nSharedLockCount,2, nMessage, timeout.GetRemaining())) return false;
+
+        TRACE (DEBUG, " -->>> ACQUIRED EXCLUSIVE LOCK");
+
+        return true;
+    }
+
+    void SmartLock::Unlock()
+    {
+        thread& k = kernel ();
+        size_t nMessage = 0;
+
+        if (m_mutex.bExclusiveLock == true)
+        {
+            m_mutex.bExclusiveLock = false;
+            if (m_control.data.bLocked == true) m_control.data.bLocked = false;
+
+            TRACE (DEBUG, " -->>> UNLOCKED");
+
+            // Notify Other locks procedures
+            k.NotifyAll (m_mutex.nSharedLockCount, 2, nMessage);
+            k.Notify (m_mutex.bExclusiveLock, 1, nMessage);
+        }
+    }
+
+    bool SmartLock::SharedLock(atomicx_time ttimeout)
+    {
+        if (m_control.nValue != 0) return false;
+
+        thread& k = kernel ();
+        Timeout timeout(ttimeout);
+        size_t nMessage = 0;
+
+        TRACE (DEBUG, " -->>> TRYING TO SHARED LOCK");
+
+        // Wait for exclusive mutex
+        while (m_mutex.bExclusiveLock) if (! k.Wait(m_mutex.bExclusiveLock, 1, nMessage, timeout.GetRemaining())) return false;
+
+        m_mutex.nSharedLockCount++;
+        m_control.data.bShared = true;
+
+        // Notify Other locks procedures
+        k.Notify (m_mutex.nSharedLockCount, 2, nMessage);
+
+        TRACE (DEBUG, " -->>> ACQUIRED SHARED LOCK");
+
+        return true;
+    }
+
+    void SmartLock::SharedUnlock()
+    {
+        size_t nMessage = 0;
+        thread& k = kernel ();
+
+        if (m_mutex.nSharedLockCount)
+        {
+            m_mutex.nSharedLockCount--;
+            if (m_control.data.bShared == true) m_control.data.bShared = false;
+
+            TRACE (DEBUG, " -->>> SHARED UNLOCKED. actives: " << m_mutex.nSharedLockCount);
+
+            k.Notify(m_mutex.nSharedLockCount, 2, nMessage);
+        }
+    }
+
+    size_t SmartLock::IsShared()
+    {
+        TRACE (DEBUG, " -->>> IS SHARED: " << m_mutex.nSharedLockCount);
+
+        // If not perform original task
+        return m_mutex.nSharedLockCount;
+    }
+
+    bool SmartLock::IsLocked()
+    {
+        TRACE (DEBUG, " -->>> IS LOCKED: " << m_mutex.bExclusiveLock);
+
+        // If not perform original task
+        return m_mutex.bExclusiveLock;
+    }
+
+    SmartLock::SmartLock (mutex& mutex) : m_mutex (mutex)
+    {
+    }
+
+    SmartLock::~SmartLock()
+    {
+        TRACE(DEBUG, "<<<< DESTRUCTION >>>>");
+
+        if (IsLocked () && m_control.data.bLocked == true)
+        {
+            Unlock ();
+        }
+
+        if (IsShared () && m_control.data.bShared == true)
+        {
+            SharedUnlock ();
+        }
+    }
+
 }

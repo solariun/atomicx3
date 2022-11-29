@@ -24,10 +24,10 @@ typedef uint32_t atomicx_time;
     // ------------------------------------------------------
     // LOG FACILITIES
     //
-    // TO USE, define -D_DEBUG=<LEVEL> where level is any of 
+    // TO USE, define -D_DEBUG=<LEVEL> where level is any of
     // . those listed in DBGLevel, ex
-    // .    -D_DEBUG=INFO 
-    // .     * on the example, from DEBUG to INFO will be 
+    // .    -D_DEBUG=INFO
+    // .     * on the example, from DEBUG to INFO will be
     // .       displayed
     // ------------------------------------------------------
 
@@ -37,11 +37,11 @@ typedef uint32_t atomicx_time;
     #define NOTRACE(i, x) (void) #x
 
     #ifdef _DEBUG
-    #include <iostream> 
+    #include <iostream>
     #define TRACE(i, x) if (DBGLevel::i <= DBGLevel::_DEBUG) std::cout << "TRACE<" << #i << "> " << this << "(" << __FUNCTION__ << ", " << __FILE__ << ":" << __LINE__ << "):" << x << std::endl << std::flush
     #else
     #define TRACE(i, x) NOTRACE(i,x)
-    #endif 
+    #endif
 
     enum class DBGLevel
     {
@@ -146,8 +146,8 @@ namespace atomicx
 
     /**
     * @brief General purpose Iterator facility
-    * 
-    * @tparam T 
+    *
+    * @tparam T
     */
     template <typename T> class Iterator
     {
@@ -177,7 +177,7 @@ namespace atomicx
         * Binary operators
         */
         friend bool operator== (const Iterator& a, const Iterator& b)
-        { 
+        {
             return a.m_ptr == b.m_ptr;
         }
 
@@ -217,19 +217,19 @@ namespace atomicx
         {
             m_ptr = (T*) m_ptr->operator++ ();
         }
-        
+
         return *this;
     }
 
     /*
     * ---------------------------------------------------------------------
-    * Implementations for Item 
+    * Implementations for Item
     * ---------------------------------------------------------------------
     */
 
     /**
     * @brief Link Item to turn any object attachable to LinkList
-    * 
+    *
     * @param T    Type to be managed
     */
     template<class I> class Item
@@ -238,7 +238,7 @@ namespace atomicx
 
             /**
              * @brief Easy way to have access to the item object
-             * 
+             *
              * @return T&   Reference to the item object
              */
             I& operator()();
@@ -253,7 +253,7 @@ namespace atomicx
             template <typename U> friend class Iterator;
 
             Item<I>* next = nullptr;
-            Item<I>* prev = nullptr;           
+            Item<I>* prev = nullptr;
     };
 
     template<class I> I& Item<I>::operator()()
@@ -273,16 +273,16 @@ namespace atomicx
 
     /*
     * ---------------------------------------------------------------------
-    * Implementations for DynamicList 
+    * Implementations for DynamicList
     * ---------------------------------------------------------------------
     */
 
     /**
     * @brief DynamicList of attachable object by extending Item
-    * 
+    *
     * @tparam T    Type of the object
-    * 
-    * @note    Note that this does not create memory, it uses next/prev added to the object 
+    *
+    * @note    Note that this does not create memory, it uses next/prev added to the object
     *          by extending the object to Item and manages it life cycle, is automatically
     *          inserted and deleted on instantiation and object destruction.
     */
@@ -297,21 +297,21 @@ namespace atomicx
         size_t m_nNodeCounter;
 
     public:
-        
+
          /**
          * @brief Attach a Item enabled obj to the list
-         * 
+         *
          * @param listItem  The object
-         * 
+         *
          * @return true if it was successful attached
          */
         bool AttachBack(T& listItem);
 
         /**
          * @brief Detach a specific Item from the managed list
-         * 
+         *
          * @param listItem  Item enabled object to be deleted
-         * 
+         *
          * @return true     if successful detached
          */
         bool Detach(T& listItem);
@@ -320,7 +320,7 @@ namespace atomicx
 
         /**
          * @brief thread::Iterator helper for signaling beginning
-         * 
+         *
          * @return Iterator<Item<T>>  the first item
          */
         Iterator<T> begin();
@@ -329,7 +329,7 @@ namespace atomicx
 
         /**
          * @brief thread::Iterator helper for signaling ending
-         * 
+         *
          * @return Iterator<Item<T>>  the final of the list
          */
         Iterator<T> end();
@@ -402,7 +402,7 @@ namespace atomicx
         return Iterator<T>(nullptr);
     }
 
-    class thread; // to be used by kernel 
+    class thread; // to be used by kernel
 
     /*
     * ---------------------------------------------------------------------
@@ -412,14 +412,14 @@ namespace atomicx
 
     // Payload containing
     // the message: the size_t message transported (capable of send pointers)
-    // the type, that describes the message, allowing layers of information within the same 
-    // reference notification 
+    // the type, that describes the message, allowing layers of information within the same
+    // reference notification
     typedef struct
     {
         size_t nType;
         size_t nMessage;
     } Payload;
-    
+
 
     typedef uint8_t NotifyChannel;
 
@@ -430,8 +430,8 @@ namespace atomicx
     // private and specialized lanes for notifications inside
     // the kernel.
     //
-    // All other synchronizations will be ported using it, 
-    // allowing autonomous and detached powerful tools and 
+    // All other synchronizations will be ported using it,
+    // allowing autonomous and detached powerful tools and
     // extra libs.
     enum NotifyType : NotifyChannel
     {
@@ -439,7 +439,7 @@ namespace atomicx
         NOTIFY_WAIT
     };
 
-    
+
     /*
     * ---------------------------------------------------------------------
     * Kernel implementation
@@ -483,11 +483,11 @@ namespace atomicx
     public:
 
         /*
-        * ATTENTION: GetTick and SleepTick MUST be ported from user 
+        * ATTENTION: GetTick and SleepTick MUST be ported from user
         *
         * crete functions with the following prototype on your code,
         * for example, see test/main.cpp
-        * 
+        *
         *   atomicx_time atomicx::Kernel::GetTick (void) { <code> }
         *   void atomicx::Kernel::SleepTick(atomicx_time nSleep) { <code> }
         */
@@ -508,10 +508,12 @@ namespace atomicx
          *       processor power consumption if necessary
          */
         void SleepTick(atomicx_time nSleep);
-        
+
         static Kernel& GetInstance();
 
         void start(void);
+
+        thread& operator()();
     };
 
 
@@ -531,15 +533,15 @@ namespace atomicx
         // can only use the most necessary function calls
         // avoid corrupting the stack space on context change
         friend class Kernel;
-        
+
         // Initial state for the thread
         status m_status = status::starting;
 
         // Thread context register buffer
         jmp_buf m_context;
-        
+
         // Total size of the virtual stack
-        size_t m_nMaxStackSize; 
+        size_t m_nMaxStackSize;
         // Actual used virtual stack
         size_t m_nStackSize = 0;
 
@@ -552,28 +554,28 @@ namespace atomicx
         atomicx_time m_tmNextEvent=0;
         atomicx_time m_tmLateBy=0;
         atomicx_time m_nNice;
-        
+
         // Wait and notify implementation
 
         // Channel of the notification
         // it exist to create specialized notifications
-        // and also custom that would not collide and 
-        // to be safe. 
+        // and also custom that would not collide and
+        // to be safe.
         // Up to 236 custom channels # 0 - 235
         // 20 channels are reserved to # 236 - 255 enum class KernelChannel
         uint8_t m_nNotifyChannel;
 
         // Notification Reference, can be any variable in the system,
-        // for consistency, only real variables can be used, no naked 
-        // values will be allowed, this wat any variable can be used as 
-        // a notifier. 
+        // for consistency, only real variables can be used, no naked
+        // values will be allowed, this wat any variable can be used as
+        // a notifier.
         void* m_pRefPointer;
 
         // Payload containing
         // the message: the size_t message transported (capable of send pointers)
-        // the type, that describes the message, allowing layers of information within the same 
+        // the type, that describes the message, allowing layers of information within the same
         // reference notification
-        Payload m_payload; 
+        Payload m_payload;
 
         struct
         {
@@ -593,7 +595,7 @@ namespace atomicx
 
         template <typename T> inline bool NotifyWait (T& ref, size_t& nType, size_t &nMessage, NotifyChannel nChannel);
 
-        template <typename T> bool LookForWait (T& ref, size_t nType, size_t &nMessage, size_t nAtLeast, Timeout nWaitFor, NotifyChannel nChannel);
+        template <typename T> bool LookForWait (T& ref, size_t nType, size_t &nMessage, size_t nAtLeast, atomicx_time nWaitFor, NotifyChannel nChannel);
 
         template<size_t N>thread (atomicx_time nNice, size_t (&stack)[N]);
 
@@ -609,7 +611,7 @@ namespace atomicx
 
         void SetNice (atomicx_time nNice);
 
-        unsigned int GetStatus ();
+        status GetStatus ();
 
         size_t GetStackSize ();
 
@@ -625,56 +627,139 @@ namespace atomicx
         template <typename T> bool WaitAll (T& ref, size_t &nType, size_t &nMessage, atomicx_time waitFor, NotifyChannel nChannel = NOTIFY_WAIT);
 
 
-        // Notifying 
+        // Notifying
         template<typename T> size_t SafeNotify(T& ref, size_t& nType, size_t& nMessage, bool bNotifyOne = true, NotifyChannel nChannel = NOTIFY_WAIT);
 
         /**
-         * @brief   Notify one active 'wait' call for the same reference and type, also capable of 
+         * @brief   Notify one active 'wait' call for the same reference and type, also capable of
          *          waiting for 'wait' calls (Sync notification) when nWaitFor is set
          *          ATTENTION: Force context change.
-         * 
+         *
          * @tparam T            Reference Value, used as the "synchronization" variable, can be any variable (only)
          * @param nType         The Type of the notification (user defined)
          * @param nMessage      The Message bound to the type (user defined)
          * @param nWaitFor      (sync notification) How long (in ticks) to 'wait' for wait calls, 0 is wait indefinitely
          * @param nChannel      the channel where it is running, if not defined it will use the default kernel NOTIFY_WAIT
-         * 
+         *
          * @return size_t       How many 'wait' calls get notified
-         * 
+         *
          * @note                Once nWaitFor is set, the process will wait until either one 'wait' call or nWaitFor
          *                      timesout.
-         *                      ATTENTION:  if nAtLeast and nWaitFor are not set, the function will NOT WAIT FOR 'WAIT' CALLS, 
+         *                      ATTENTION:  if nAtLeast and nWaitFor are not set, the function will NOT WAIT FOR 'WAIT' CALLS,
          *                                  instead it will only used whatever 'wait' calls are active.
-         * 
+         *
          * @todo                TODO: Add timeout once time is ported to the kernel
          */
         template<typename T> size_t Notify(T& ref, size_t nType, size_t nMessage, atomicx_time nWaitFor=0, NotifyChannel nChannel = NOTIFY_WAIT);
-        
+
         /**
-         * @brief   Notify all active 'wait' calls for the same reference and type, also capable of 
-         *          waiting for # number of 'wait' calls (Sync notification) when nAtLeast and 
+         * @brief   Notify all active 'wait' calls for the same reference and type, also capable of
+         *          waiting for # number of 'wait' calls (Sync notification) when nAtLeast and
          *          nWaitFor are set
          *          ATTENTION: Force context change.
-         * 
+         *
          * @tparam T            Reference Value, used as the "synchronization" variable, can be any variable (only)
          * @param nType         The Type of the notification (user defined)
          * @param nMessage      The Message bound to the type (user defined)
          * @param nAtLeast      (sync notification) wait for at least nAtLeast 'wait' calls
          * @param nWaitFor      (sync notification) How long (in ticks) to 'wait' for wait calls, 0 is wait indefinitely
          * @param nChannel      the channel where it is running, if not defined it will use the default kernel NOTIFY_WAIT
-         * 
+         *
          * @return size_t       How many 'wait' calls get notified
-         * 
+         *
          * @note                Once nAtLeast and nWaitFor are set, the process will wait until either nAtLeast or nWaitFor
          *                      timesout.
-         *                      ATTENTION:  if nAtLeast and nWaitFor are not set, the function will NOT WAIT FOR 'WAIT' CALLS, 
+         *                      ATTENTION:  if nAtLeast and nWaitFor are not set, the function will NOT WAIT FOR 'WAIT' CALLS,
          *                                  instead it will only used whatever 'wait' calls are active.
-         * 
+         *
          * @todo                TODO: Add timeout once time is ported to the kernel
          */
         template<typename T> size_t NotifyAll(T& ref, size_t nType, size_t nMessage, size_t nAtLeast=0, atomicx_time nWaitFor=0, NotifyChannel nChannel = NOTIFY_WAIT);
     };
 
+        /**
+         * ------------------------------
+         * SMART LOCK IMPLEMENTATION
+         * ------------------------------
+         */
+
+
+    /* The smart mutex implementation */
+    class mutex
+    {
+    protected:
+        friend class SmartLock;
+
+        size_t nSharedLockCount = 0;
+        bool bExclusiveLock = false;
+    };
+
+    class SmartLock
+    {
+    public:
+
+        SmartLock () = delete;
+
+        SmartLock(mutex& mutex);
+
+        ~SmartLock();
+
+        /**
+         * @brief Exclusive/binary lock the smart lock
+         *
+         * @note Once Lock() method is called, if any thread held a shared lock,
+         *       the Lock will wait for it to finish in order to acquire the exclusive
+         *       lock, and all other threads that needs to a shared lock will wait till
+         *       Lock is acquired and released.
+         */
+        bool Lock(atomicx_time ttimeout=0);
+
+        /**
+         * @brief Release the exclusive lock
+         */
+        void Unlock();
+
+        /**
+         * @brief Shared Lock for the smart Lock
+         *
+         * @note Shared lock can only be acquired if no Exclusive lock is waiting or already acquired a exclusive lock,
+         *       In contrast, if at least one thread holds a shared lock, any exclusive lock can only be acquired once it
+         *       is released.
+         */
+        bool SharedLock(atomicx_time ttimeout=0);
+
+        /**
+         * @brief Release the current shared lock
+         */
+        void SharedUnlock();
+
+        /**
+         * @brief Check how many shared locks are accquired
+         *
+         * @return size_t   Number of threads holding shared locks
+         */
+        size_t IsShared();
+
+        /**
+         * @brief Check if a exclusive lock has been already accquired
+         *
+         * @return true if yes, otherwise false
+         */
+        bool IsLocked();
+
+    protected:
+    private:
+        mutex& m_mutex;
+        union
+        {
+            struct
+            {
+                bool bShared : 1;
+                bool bLocked : 1;
+            } data;
+            uint8_t nValue = 0;
+        } m_control;
+    };
 
     /*
     * ---------------------------------------------------------------------
@@ -696,21 +781,21 @@ namespace atomicx
     */
 
 
-    template<size_t N> thread::thread (atomicx_time nNice, size_t (&stack)[N]) : 
+    template<size_t N> thread::thread (atomicx_time nNice, size_t (&stack)[N]) :
         m_status(status::starting),
         m_context{},
-        m_nMaxStackSize(N*sizeof (size_t)), 
+        m_nMaxStackSize(N*sizeof (size_t)),
         m_pStack ((size_t*) &stack),
         m_nNice (nNice)
     {
         kernel.AttachBack (*this);
     }
 
-    
+
     // *********************
     // WAIT / Notify bases
     // *********************
-    
+
     //private
 
     template<typename T> size_t thread::PrvSafeNotify(T& ref, size_t& nType, size_t& nMessage, status targetStatus, bool bNotifyOne, NotifyChannel nChannel)
@@ -729,7 +814,7 @@ namespace atomicx
                     // if set to notify all waits regardless of type
                     if (th.m_flags.bWaitAnyType || nType == th.m_payload.nType)
                     {
-                        // Return now 
+                        // Return now
                         th.m_status = status::now;
                         //th.m_tmNextEvent = kernel.GetTick ();
 
@@ -819,22 +904,26 @@ namespace atomicx
 
     template<typename T> size_t thread::Notify(T& ref, size_t nType, size_t nMessage, atomicx_time nWaitFor, NotifyChannel nChannel)
     {
-        if (nWaitFor) if(LookForWait (ref, nType, nMessage, 1, nWaitFor, nChannel) == false) return -1;
-    
+        Timeout tm(nWaitFor);
+
+        if (nWaitFor) if(LookForWait (ref, nType, nMessage, 1, tm.GetRemaining (), nChannel) == false) return 0;
+
         size_t nReturn = SafeNotify (ref, nType, nMessage, true, nChannel);
 
-        yield (0, status::now);
+        yield (tm.GetRemaining (), status::now);
 
         return nReturn;
     }
 
     template<typename T> size_t thread::NotifyAll(T& ref, size_t nType, size_t nMessage, size_t nAtLeast, atomicx_time nWaitFor, NotifyChannel nChannel)
     {
-        if (nWaitFor && nAtLeast)  if(LookForWait (ref, nType, nMessage, nAtLeast, nWaitFor, nChannel) == false) return -1;
+        Timeout tm(nWaitFor);
+
+        if (nWaitFor && nAtLeast)  if(LookForWait (ref, nType, nMessage, nAtLeast, tm.GetRemaining (), nChannel) == false) return 0;
 
         size_t nReturn = SafeNotify (ref, nType, nMessage, false, nChannel);
 
-        yield (0, status::now);
+        yield (tm.GetRemaining (), status::now);
 
         return nReturn;
     }
@@ -846,9 +935,10 @@ namespace atomicx
         return nReturn ? true : false;
     }
 
-     template <typename T> bool thread::LookForWait (T& ref, size_t nType, size_t &nMessage,size_t nAtLeast, Timeout nWaitFor, NotifyChannel nChannel)
+     template <typename T> bool thread::LookForWait (T& ref, size_t nType, size_t &nMessage,size_t nAtLeast, atomicx_time nWaitFor, NotifyChannel nChannel)
      {
         size_t nCounter = 0;
+        Timeout tm(nWaitFor);
 
         do
         {
@@ -858,9 +948,9 @@ namespace atomicx
             {
                 if (th.m_status == status::wait && th.m_nNotifyChannel == nChannel)
                 {
-                    if (th.m_pRefPointer == &ref && th.m_payload.nType == nType)
+                    if (th.m_pRefPointer == &ref && (th.m_payload.nType == nType | th.m_flags.bWaitAnyType == true))
                     {
-                        if ((++nCounter) >= nAtLeast)
+                        if ((++nCounter) >= nAtLeast || nAtLeast == 0)
                         {
                             return true;
                         }
@@ -868,14 +958,14 @@ namespace atomicx
                 }
             }
 
-            // Wait for one more start waiting, as a result, 
-            // other contexts have been executed so the actual nCounter may have 
+            // Wait for one more start waiting, as a result,
+            // other contexts have been executed so the actual nCounter may have
             // changed, counter again, if nCounter >= nCounter return.
             // TODO Soon time is ported, add timeout and error handler here
             if (SetWait (ref, nType, nMessage, false, nChannel) == false) return false;
-            yield (nWaitFor.GetRemaining() + 1, status::syncWait);
+            yield (tm.GetRemaining() + 1, status::syncWait);
 
-        } while (nWaitFor.IsTimedout () == false);
+        } while (tm.IsTimedout () == false);
 
         return false;
      }

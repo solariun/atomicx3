@@ -19,6 +19,8 @@
 
 void* ref;
 
+atomicx::mutex mt;
+
 /*
  * Define the default ticket granularity
  * to milliseconds or round tick if -DFAKE_TICKER
@@ -83,6 +85,9 @@ public:
             }
             else
             {
+                //atomicx::SmartLock local(mt);
+                //local.Lock (); Now ();
+
                 nCounter++;
             }
         }
@@ -95,7 +100,7 @@ public:
 
 };
 
-size_t WaitCounter::nCounter=0; 
+size_t WaitCounter::nCounter=0;
 
 class WaitThread : public atomicx::thread
 {
@@ -128,7 +133,7 @@ public:
         {
             //std::cout << __func__ << ", WAIT for a  message... " << std::endl << std::flush;
 
-            if (Wait (ref, 1, nMessage, 100) == false)
+            if (Wait (ref, 1, nMessage, 1000) == false)
             {
                 std::cout << this << "<<<TIMEOUT>>>." << __func__ << ": Wait timeout detected." << std::endl;
             }
@@ -153,7 +158,7 @@ class Test : public atomicx::thread
         size_t stack [128];
 
     public:
-        Test () : thread(300, stack)
+        Test () : thread(10, stack)
         {
 
         }
@@ -175,15 +180,23 @@ class Test : public atomicx::thread
             size_t nNotified = 0;
             int nValue = 0;
 
-            while (true)
+            while (yield ())
             {
                 // Also force context change
-                if ((nNotified = NotifyAll (ref, 1, (size_t) this, 1,1000)) == -1)
+                if ((nNotified = NotifyAll (ref, 1, (size_t) this, 1,1000)) && GetStatus () == atomicx::status::timeout)
                 {
                     std::cout << this << "<<<TIMEOUT>>>." << __func__ << ": Wait timeout detected." << std::endl;
                 }
-                
+
+                //atomicx::SmartLock local(mt);
+                //local.SharedLock (); Now ();
+
                 std::cout << __func__ << "<" << atomicx::kernel.GetTick () << "> WaitCounter: " << WaitCounter::nCounter <<", Value: [" << nValue++ << "], Notified: [" << (ssize_t) nNotified << "]. ID:" << std::hex << (this) << std::dec << ", StackSize: " << GetStackSize () << "/" << GetMaxStackSize () << ((char) 27) << "[K" << std::endl << ((char) 13) << std::flush;
+
+                if (GetStatus () == atomicx::status::timeout)
+                {
+                    exit (0);
+                }
             }
         }
 
@@ -197,27 +210,20 @@ int main ()
 {
     Test test1;
     Test test2;
-    Test test3;
 
-     WaitThread wait1;
+    WaitThread wait1;
 
-    //Test test4;
-    Test test5;
+    Test test4;
 
     WaitThread wait2;
+
+    Test test5;
+    Test test6;
+
     WaitThread wait3;
 
-    // // Test test6;
-    Test test7;
-    Test test8;
+    WaitCounter wcount1;
 
-    WaitThread wait4;
-    WaitThread wait5;
-    WaitThread wait6;
-    WaitThread wait7;
-
-    WaitCounter counter1;
-    
     for (auto& th : atomicx::kernel)
     {
         std::cout << __func__ << ": listing thread: " << th().GetName () << std::hex << ", ID: " << ((size_t) &(th())) << std::dec << std::endl;

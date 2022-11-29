@@ -3,6 +3,8 @@
 
 void* ref;
 
+atomicx::mutex mt;
+
 atomicx_time atomicx::Kernel::GetTick(void)
 {
     return millis();
@@ -12,6 +14,58 @@ void atomicx::Kernel::SleepTick(atomicx_time nSleep)
 {
     delay(nSleep);
 }
+
+
+class WaitCounter : public atomicx::thread
+{
+private:
+    size_t stack [45];
+
+public:
+    static size_t nCounter;
+
+    WaitCounter () : thread (10, stack)
+    {
+
+    }
+
+    ~WaitCounter ()
+    { }
+
+    const char* GetName ()
+    {
+        return "WaitCounter";
+    }
+
+    void run ()
+    {
+        size_t nType;
+        size_t nMessage = 0;
+
+        while (true)
+        {
+            if (WaitAll (ref, nType, nMessage, 1000))
+            {
+                atomicx::SmartLock local(mt);
+                local.Lock (); Now ();
+                nCounter++;
+            }
+        }
+    }
+
+    void StackOverflowHandler ()
+    {
+        Serial.println ((size_t) this);
+        Serial.print (F(": WaitCounter::StackOverflow, stack size:"));
+        Serial.print (GetStackSize ());
+        Serial.print ("/");
+        Serial.println (GetMaxStackSize ());
+        Serial.flush ();
+        delay (5000);
+    }
+};
+
+size_t WaitCounter::nCounter=0; 
 
 class WaitThread : public atomicx::thread
 {
@@ -27,7 +81,7 @@ public:
     ~WaitThread ()
     {
         Serial.println ((size_t) this);
-        Serial.print (": Destructing waitThread ID:");
+        Serial.print (F(": Destructing waitThread ID:"));
         Serial.flush ();
     }
 
@@ -36,7 +90,7 @@ public:
         size_t nMessage = 0;
 
         Serial.println ((size_t) this);
-        Serial.print (": Initiating waitThread ID:");
+        Serial.print (F(": Initiating waitThread ID:"));
         Serial.flush ();        
 
         while (yield ())
@@ -47,10 +101,13 @@ public:
 
     void StackOverflowHandler ()
     {
-        Serial.print ("test::StackOverflow, stack size:");
+        Serial.println ((size_t) this);
+        Serial.print (F(":test::StackOverflow, stack size:"));
         Serial.print (GetStackSize ());
         Serial.print ("/");
         Serial.println (GetMaxStackSize ());
+        Serial.flush ();
+        delay (5000);
     }
 
 };
@@ -58,7 +115,7 @@ public:
 class test : public atomicx::thread
 {
 private:
-    size_t stack [35];
+    size_t stack [60];
 
 public:
     test () : thread(10, stack)
@@ -76,22 +133,23 @@ public:
 
     void run ()
     {
-        (void) __COUNTER__;
-
-        Serial.print (__FUNCTION__);
+        Serial.print (F("run"));
         Serial.print (F(": Thread initiating: "));
         Serial.println ((size_t) this);
         Serial.flush ();
 
-        Sleep(100);
-
         int nValue = 0;
         size_t nNotified = 0;
 
-        while (true)
+        while (yield ())
         {
             nNotified = NotifyAll (ref, 1, (size_t) this, 3, 500);
 
+            {    
+                atomicx::SmartLock local(mt);
+                local.SharedLock (); Now ();
+            }
+            
             Serial.print (__FUNCTION__);
 
             Serial.print (F(": Time: ["));
@@ -102,6 +160,9 @@ public:
             
             Serial.print (F("], Notified: ["));
             Serial.print (nNotified);
+
+            Serial.print (F(" / "));
+            Serial.print (WaitCounter::nCounter);
 
             Serial.print (F("], ID:"));
             Serial.print ((size_t) this);
@@ -114,22 +175,22 @@ public:
             // Terminal scape control tv100/xterm to
             // clear the rest of the line.
             Serial.print ((char) 27) ;
-            Serial.print ("[0K");
+            Serial.print (F("[0K"));
 
             Serial.println ();
             //Serial.println ((char) 13);
             Serial.flush ();
-            
-            yield ();
         }
     }
 
     void StackOverflowHandler ()
     {
-        Serial.print ("test::StackOverflow, stack size:");
+        Serial.print ((size_t) this);
+        Serial.print (F(": test::StackOverflow, stack size:"));
         Serial.print (GetStackSize ());
         Serial.print ("/");
         Serial.println (GetMaxStackSize ());
+        Serial.flush ();
 
         delay (5000);
     }
@@ -140,7 +201,7 @@ void setup()
 {
     test test1;
     test test2;
-    test test3;
+
     WaitThread wait1;
 
     test test4;
@@ -149,11 +210,10 @@ void setup()
 
     test test5; 
     test test6;
+
     WaitThread wait3;
 
-    test test7;
-
-    WaitThread wait4;
+    WaitCounter wcount1;
 
     Serial.begin (115200);
 

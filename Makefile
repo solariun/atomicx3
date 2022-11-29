@@ -25,7 +25,7 @@
 # 'make'        build executable file 'mycc'
 # 'make clean'  removes all .o and executable files
 #
-# use EXTRA_FLAGS=_DEBUG=<TRACE, DEBUG, INFO. WARNING. ERROR, CRITICAL> 
+# use EXTRA_FLAGS=_DEBUG=<TRACE, DEBUG, INFO. WARNING. ERROR, CRITICAL>
 # .   for logging
 
 # define the C compiler to use
@@ -90,9 +90,9 @@ endef
 
 .PHONY: build
 
-# same as all: 
-# 	Making multiple targets and you want all of them to run? Make an all target. 
-# *Since this is the first rule listed*, it will run by default if make is called without 
+# same as all:
+# 	Making multiple targets and you want all of them to run? Make an all target.
+# *Since this is the first rule listed*, it will run by default if make is called without
 # specifying a target, regardless the name, "all" is a convention name for it.
 default: build
 	@echo  AtomicX binary $(TARGET) has been compiled
