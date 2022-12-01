@@ -85,8 +85,8 @@ public:
             }
             else
             {
-                //atomicx::SmartLock local(mt);
-                //local.Lock (); Now ();
+                atomicx::SmartLock local(mt);
+                local.Lock (); Now ();
 
                 nCounter++;
             }
@@ -183,15 +183,15 @@ class Test : public atomicx::thread
             while (yield ())
             {
                 // Also force context change
-                if ((nNotified = NotifyAll (ref, 1, (size_t) this, 1,1000)) && GetStatus () == atomicx::status::timeout)
+                if ((nNotified = NotifyAll (ref, 1, (size_t) this, 10000, 3)) && GetStatus () == atomicx::status::timeout)
                 {
                     std::cout << this << "<<<TIMEOUT>>>." << __func__ << ": Wait timeout detected." << std::endl;
                 }
 
-                //atomicx::SmartLock local(mt);
-                //local.SharedLock (); Now ();
+                atomicx::SmartLock local(mt);
+                local.SharedLock (); Now ();
 
-                std::cout << __func__ << "<" << atomicx::kernel.GetTick () << "> WaitCounter: " << WaitCounter::nCounter <<", Value: [" << nValue++ << "], Notified: [" << (ssize_t) nNotified << "]. ID:" << std::hex << (this) << std::dec << ", StackSize: " << GetStackSize () << "/" << GetMaxStackSize () << ((char) 27) << "[K" << std::endl << ((char) 13) << std::flush;
+                std::cout << "test::run" << "<" << atomicx::kernel.GetTick () << "> Timeout: " << (GetStatus () == atomicx::status::timeout) <<", WaitCounter: " << WaitCounter::nCounter <<", Value: [" << nValue++ << "], Notified: [" << (ssize_t) nNotified << "]. ID:" << std::hex << (this) << std::dec << ", StackSize: " << GetStackSize () << "/" << GetMaxStackSize () << ((char) 27) << "[K" << std::endl << ((char) 13) << std::flush;
 
                 if (GetStatus () == atomicx::status::timeout)
                 {
@@ -218,7 +218,6 @@ int main ()
     WaitThread wait2;
 
     Test test5;
-    Test test6;
 
     WaitThread wait3;
 

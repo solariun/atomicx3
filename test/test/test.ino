@@ -115,7 +115,7 @@ public:
 class test : public atomicx::thread
 {
 private:
-    size_t stack [60];
+    size_t stack [50];
 
 public:
     test () : thread(10, stack)
@@ -140,34 +140,47 @@ public:
 
         int nValue = 0;
         size_t nNotified = 0;
+        bool bTimeout;
+
+        atomicx_time start = 0;
 
         while (yield ())
         {
-            nNotified = NotifyAll (ref, 1, (size_t) this, 3, 500);
+            start = atomicx::kernel.GetTick ();
+            nNotified = NotifyAll (ref, 1, (size_t) this, 1000, 3);
 
-            {    
-                atomicx::SmartLock local(mt);
-                local.SharedLock (); Now ();
-            }
+            start = atomicx::kernel.GetTick () - start;
+
+            bTimeout = GetStatus () == atomicx::status::timeout;
+
+            atomicx::SmartLock local(mt);
+            local.SharedLock (); 
+            Now ();
             
-            Serial.print (__FUNCTION__);
+            Serial.print (F("test::run"));
 
-            Serial.print (F(": Time: ["));
-            Serial.print (atomicx::kernel.GetTick ());
+            Serial.print (F(": taken: ["));
+            Serial.print (start);
 
-            Serial.print (F("]: Value: ["));
+            Serial.print (F("] Timeour: ["));
+            Serial.print (bTimeout);
+
+            Serial.print (F("] Status: ["));
+            Serial.print ((int) GetStatus ());
+
+            Serial.print (F("] Value: ["));
             Serial.print (nValue++);
             
-            Serial.print (F("], Notified: ["));
+            Serial.print (F("] Notified: ["));
             Serial.print (nNotified);
 
             Serial.print (F(" / "));
             Serial.print (WaitCounter::nCounter);
 
-            Serial.print (F("], ID:"));
+            Serial.print (F("] ID: ["));
             Serial.print ((size_t) this);
             
-            Serial.print (F(", StackSize: "));
+            Serial.print (F("] StackSize: "));
             Serial.print (GetStackSize ());
             Serial.print (F("/"));
             Serial.print (GetMaxStackSize ());
@@ -180,6 +193,8 @@ public:
             Serial.println ();
             //Serial.println ((char) 13);
             Serial.flush ();
+
+            if (bTimeout) exit (-1);
         }
     }
 
@@ -209,7 +224,6 @@ void setup()
     WaitThread wait2;
 
     test test5; 
-    test test6;
 
     WaitThread wait3;
 
