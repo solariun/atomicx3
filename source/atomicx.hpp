@@ -463,6 +463,33 @@ namespace atomicx
         now=201
     };
 
+    static char*& GetStatusName(status st)
+    {
+    #define caseStatus(st) case st: name=#st; break;
+        char* name="undefined";
+        switch (st)
+        {
+            caseStatus (status::none);
+            caseStatus (status::starting);
+
+            caseStatus (status::wait);
+            caseStatus (status::syncWait);
+            caseStatus (status::ctxSwitch);
+            
+            caseStatus (status::sleeping);
+            caseStatus (status::timeout);
+            caseStatus (status::halted);
+            caseStatus (status::paused);
+            
+            caseStatus (status::locked);
+
+            caseStatus (status::running);
+            caseStatus (status::now);
+        }
+
+        return name;
+    } 
+
     class Kernel : public DynamicList<thread>
     {
     private:
@@ -529,7 +556,8 @@ namespace atomicx
 
     class thread : public Item<thread>
     {
-    private:
+    //private:
+    public:
         // Give full access to Kernel, so main look
         // can only use the most necessary function calls
         // avoid corrupting the stack space on context change
@@ -587,6 +615,8 @@ namespace atomicx
 
         template<typename T> size_t PrvSafeNotify(T& ref, size_t& nType, size_t& nMessage, status targetStatus, bool bNotifyAll, NotifyChannel nChannel);
 
+        bool SetNextEventTime (thread* th, atomicx_time tmSleepTime, status type);
+
         bool yield(atomicx_time aTime=0, status type = status::ctxSwitch);
 
         template <typename T> bool SetWait (T& ref, size_t& nType, size_t& nMessage, bool bWaitAllTypes, NotifyChannel& nChannel);
@@ -601,6 +631,7 @@ namespace atomicx
         template<size_t N>thread (atomicx_time nNice, size_t (&stack)[N]);
 
         virtual ~thread ();
+
 
     public:
 
@@ -820,18 +851,22 @@ namespace atomicx
                     {
                         // Return now
                         th.m_status = status::now;
-                        //th.m_tmNextEvent = kernel.GetTick ();
+                        th.m_tmNextEvent = kernel.GetTick () - 1;
+
+                        //SetNextEventTime (&th, 0, status::now);
 
                         // Populate retuning data
                         th.m_payload.nType = nType;
                         th.m_payload.nMessage = nMessage;
 
                         TRACE(DEBUG,
-                                "Target Status: " << (int) targetStatus \
+                                " <<!!!>> Target Status: " << (int) targetStatus \
+                                << ", NotifyOne: " << bNotifyOne \
                                 << ", Notifying [" << &th << "](" << th.GetName () \
                                 << "), nType: " << th.m_payload.nType \
                                 << ", Channel: " << (int) nChannel \
-                                << ", Message: " << (void*) th.m_payload.nMessage
+                                << ", Message: " << (void*) th.m_payload.nMessage \
+                                << ", Thread status: " << (int) th.m_status
                             );
 
                         nNotified++;
@@ -979,9 +1014,10 @@ namespace atomicx
             if (HasWaits (ref, nType, nAtLeast, nChannel)) return true;
 
             SetWait (ref, nType, nMessage, false, nChannel);
-            yield (tm.GetRemaining ()+1, status::syncWait);
+            yield ((tm.GetRemaining ()/10)+1, status::syncWait);
+        } while ((tm.IsTimedout ()) == false);
 
-        } while (tm.IsTimedout () == false);
+        m_status = status::timeout;
 
         return false;
     }

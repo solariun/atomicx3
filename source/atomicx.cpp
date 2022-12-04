@@ -94,7 +94,7 @@ namespace atomicx
 
             iterator = iterator == nullptr ? (thread*) m_first : iterator->next == nullptr ? m_first : (thread*) iterator->next;
 
-            if (iterator != nullptr) NOTRACE (DEBUG, "LOOP st: " << (int) iterator->m_status <<", next: " << iterator->m_tmNextEvent << ": " << iterator->GetName ());
+            //if (iterator != nullptr) TRACE (DEBUG, "LOOP st: " << (int) iterator->m_status <<", next: " << iterator->m_tmNextEvent << ": " << iterator->GetName ());
 
             if (iterator != nullptr) switch (iterator->m_status)
             {
@@ -119,7 +119,6 @@ namespace atomicx
                 default:
                     thCandidate = iterator;
                     thCandidate->m_tmNextEvent = nNow;
-
                     nCounter = m_nNodeCounter;
                     continue;
             }
@@ -205,19 +204,60 @@ namespace atomicx
     * thread methods implementations
     */
 
+    bool thread::SetNextEventTime (thread* th, atomicx_time tmSleepTime, status type)
+    {
+        if (th == nullptr) return false;
+
+        TRACE (DEBUG, "SWITCH type: " << (int) type << ", waitFor: " << tmSleepTime << ", Current: " << th << ". nextEvent: " << th->m_tmNextEvent << ", Status: " << (int) th->m_status);
+
+        //Prepare status
+        // if yield (x>0), the default status is status::ctxSwitch
+        // .  X > 0, it will work as a sleep, otherwise use
+        // .  the given default nice value
+        //
+        switch (type)
+        {
+
+        case status::ctxSwitch:
+            th->m_tmNextEvent =  kernel.GetTick () + (tmSleepTime ? tmSleepTime : th->m_nNice);
+            type = status::sleeping;
+            break;
+
+        case status::wait:
+        case status::syncWait:
+            // if wait for == 0, wait indefinitely
+            if (tmSleepTime == 0)
+            {
+                th->m_tmNextEvent = 0;
+                break;
+            }
+
+        case status::sleeping:
+            th->m_tmNextEvent =  kernel.GetTick () + tmSleepTime;
+            break;
+
+        case status::now:
+            th->m_tmNextEvent =  kernel.GetTick ();
+            break;
+
+        default:
+            th->m_tmNextEvent = (atomicx_time) kernel.GetTick ();
+        }
+
+        th->m_status = type;
+
+        TRACE (DEBUG, "SWITCH final: " << th << ". nextEvent: " << th->m_tmNextEvent << ", Selected status: " << (int) th->m_status);
+
+        return true;
+    }
+
     bool thread::yield(atomicx_time aTime, status type)
     {
-        (void) aTime;
-
         if (! kernel.nRunning) return 1;
 
-        // Get final util stack point
-        volatile uint8_t __var = 0;
-        kernel.m_pCurrent->m_pStackEnd = (uint8_t*) &__var;
+        TRACE (DEBUG, "SWITCH type: " << (int) type << ", waitFor: " << aTime << ", Current: " << kernel.m_pCurrent << ". nextEvent: " << kernel.m_pCurrent->m_tmNextEvent << ", Status: " << (int) kernel.m_pCurrent->m_status);
 
-
-        NOTRACE (DEBUG, "SWITCH type: " << (int) type << ", waitFor: " << aTime << ", Current: " << kernel.m_pCurrent << ". nextEvent: " << kernel.m_pCurrent->m_tmNextEvent << ", Status: " << (int) kernel.m_pCurrent->m_status);
-
+#if 0
         //Prepare status
         // if yield (x>0), the default status is status::ctxSwitch
         // .  X > 0, it will work as a sleep, otherwise use
@@ -245,7 +285,7 @@ namespace atomicx
             break;
 
         case status::now:
-            kernel.m_pCurrent->m_tmNextEvent =  kernel.GetTick ();
+            kernel.m_pCurrent->m_tmNextEvent =  kernel.GetTick ()-1;
             break;
 
         default:
@@ -255,6 +295,18 @@ namespace atomicx
         NOTRACE (DEBUG, "SWITCH final: " << kernel.m_pCurrent << ". nextEvent: " << kernel.m_pCurrent->m_tmNextEvent << ", Selected status: " << (int) type);
 
         kernel.m_pCurrent->m_status = type;
+
+#else
+
+        if (SetNextEventTime (kernel.m_pCurrent, aTime, type) == false) return false;
+
+#endif
+
+        TRACE (DEBUG, "SWITCH final: " << kernel.m_pCurrent << ". nextEvent: " << kernel.m_pCurrent->m_tmNextEvent << ", Selected status: " << (int) kernel.m_pCurrent->m_status);
+
+        // Get final util stack point
+        volatile uint8_t __var = 0;
+        kernel.m_pCurrent->m_pStackEnd = (uint8_t*) &__var;
 
         // Calculate used stack size
         kernel.m_pCurrent->m_nStackSize = (kernel.m_pStackStart - kernel.m_pCurrent->m_pStackEnd);

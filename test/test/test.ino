@@ -156,42 +156,72 @@ public:
             atomicx::SmartLock local(mt);
             local.SharedLock (); 
             Now ();
-            
+
             Serial.print (F("test::run"));
 
-            Serial.print (F(": taken: ["));
+            Serial.print (", ID: [");
+            Serial.print ((int) this, HEX);
+
+            Serial.print (F("] taken: ["));
             Serial.print (start);
 
             Serial.print (F("] Timeour: ["));
             Serial.print (bTimeout);
 
-            Serial.print (F("] Status: ["));
-            Serial.print ((int) GetStatus ());
-
             Serial.print (F("] Value: ["));
             Serial.print (nValue++);
-            
+
             Serial.print (F("] Notified: ["));
             Serial.print (nNotified);
 
             Serial.print (F(" / "));
             Serial.print (WaitCounter::nCounter);
+            Serial.println (F("]"));
 
-            Serial.print (F("] ID: ["));
-            Serial.print ((size_t) this);
-            
-            Serial.print (F("] StackSize: "));
-            Serial.print (GetStackSize ());
-            Serial.print (F("/"));
-            Serial.print (GetMaxStackSize ());
+            Serial.flush ();
+                        
+            for (thread& th : atomicx::kernel)
+            {
+ 
+                Serial.print (F("* ID: ["));
+                Serial.print ((size_t) &th, HEX);
 
-            // Terminal scape control tv100/xterm to
-            // clear the rest of the line.
-            Serial.print ((char) 27) ;
-            Serial.print (F("[0K"));
+                Serial.print (F(" ("));
+                Serial.print (th.GetName ());
 
-            Serial.println ();
-            //Serial.println ((char) 13);
+                Serial.print (F(")] StackSize: ["));
+                Serial.print (th.GetStackSize ());
+                Serial.print (F("/"));
+                Serial.print (th.GetMaxStackSize ());
+
+                Serial.print (F("] Status: "));
+                Serial.print ((int) th.GetStatus ());
+
+                Serial.print (", NextEvent: ");
+                Serial.print ((int32_t) atomicx::kernel.GetTick () - th.m_tmNextEvent);
+
+                Serial.print (", ch: ");
+                Serial.print (th.m_nNotifyChannel);
+
+                Serial.print (", ref: ");
+                Serial.print ((size_t) th.m_pRefPointer, HEX);
+                Serial.print ("/");
+                Serial.print ((size_t) &ref, HEX);
+
+                Serial.print (", type: ");
+                Serial.print (th.m_payload.nType);
+
+                // Terminal scape control tv100/xterm to
+                // clear the rest of the line.
+                //Serial.print ((char) 27) ;
+                //Serial.print (F("[0K"));
+
+                Serial.println ();
+                //Serial.println ((char) 13);
+                Serial.flush ();
+            }
+
+            Serial.println ("--------------------------------------------");
             Serial.flush ();
 
             if (bTimeout) exit (-1);
@@ -227,7 +257,7 @@ void setup()
 
     WaitThread wait3;
 
-    WaitCounter wcount1;
+    //WaitCounter wcount1;
 
     Serial.begin (115200);
 
@@ -246,8 +276,6 @@ void setup()
     }
 
     Serial.println ("-------------------------------------");
-
-    delay (1000);
 
     atomicx::kernel.start();
 
